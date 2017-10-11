@@ -29,14 +29,22 @@ def main():
     parser.add_argument('--batchSz', type=int, default=64)
     parser.add_argument('--nEpochs', type=int, default=300)
     parser.add_argument('--no-cuda', action='store_true')
+    parser.add_argument('--dataRoot')
     parser.add_argument('--save')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--opt', type=str, default='sgd',
                         choices=('sgd', 'adam', 'rmsprop'))
+    parser.add_argument('--cifar', type=str, default='10',
+                        choices=('10', '100'))
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     args.save = args.save or 'work/densenet.base'
+
+    cifar10 = args.cifar == '10'
+    download = not args.dataRoot
+    data_root = args.dataRoot or 'cifar'
+
 
     torch.manual_seed(args.seed)
     if args.cuda:
@@ -46,8 +54,13 @@ def main():
         shutil.rmtree(args.save)
     os.makedirs(args.save, exist_ok=True)
 
-    normMean = [0.49139968, 0.48215827, 0.44653124]
-    normStd = [0.24703233, 0.24348505, 0.26158768]
+    if cifar10:
+        normMean = [0.53129727, 0.52593911, 0.52069134]
+        normStd = [0.28938246, 0.28505746, 0.27971658]
+    else:
+        normMean =  [0.5423671, 0.53410053, 0.52827841]
+        normStd = [0.30129549, 0.29579896, 0.29065931]
+
     normTransform = transforms.Normalize(normMean, normStd)
 
     trainTransform = transforms.Compose([
@@ -62,17 +75,18 @@ def main():
     ])
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+    cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
     trainLoader = DataLoader(
-        dset.CIFAR10(root='cifar', train=True, download=True,
+        cifar_cls(root=data_root, train=True, download=download,
                      transform=trainTransform),
         batch_size=args.batchSz, shuffle=True, **kwargs)
     testLoader = DataLoader(
-        dset.CIFAR10(root='cifar', train=False, download=True,
+        cifar_cls(root=data_root, train=False, download=download,
                      transform=testTransform),
         batch_size=args.batchSz, shuffle=False, **kwargs)
 
     net = densenet.DenseNet(growthRate=12, depth=100, reduction=0.5,
-                            bottleneck=True, nClasses=10)
+                            bottleneck=True, nClasses=(10 if cifar10 else 100))
 
     print('  + Number of params: {}'.format(
         sum([p.data.nelement() for p in net.parameters()])))
@@ -90,11 +104,17 @@ def main():
     trainF = open(os.path.join(args.save, 'train.csv'), 'w')
     testF = open(os.path.join(args.save, 'test.csv'), 'w')
 
+    best_error = 100
     for epoch in range(1, args.nEpochs + 1):
         adjust_opt(args.opt, optimizer, epoch)
         train(args, epoch, net, trainLoader, optimizer, trainF)
-        test(args, epoch, net, testLoader, optimizer, testF)
-        torch.save(net, os.path.join(args.save, 'latest.pth'))
+        err = test(args, epoch, net, testLoader, optimizer, testF)
+
+        if err < best_error:
+            best_error = err
+            print('New best error {}'.format(err))
+            torch.save(net.state_dict(), os.path.join(args.save, 'model_cifar{}.t7'.format(args.cifar)))
+
         os.system('./plot.py {} &'.format(args.save))
 
     trainF.close()
@@ -148,6 +168,7 @@ def test(args, epoch, net, testLoader, optimizer, testF):
 
     testF.write('{},{},{}\n'.format(epoch, test_loss, err))
     testF.flush()
+    return err
 
 def adjust_opt(optAlg, optimizer, epoch):
     if optAlg == 'sgd':
