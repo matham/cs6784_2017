@@ -99,7 +99,7 @@ class DenseNet(nn.Module):
                 m.bias.data.zero_()
 
     def reset_last_layer(self):
-        self.fc = nn.Linear(self.final_chans, self.n_classes)
+        self.fc.reset_parameters()
         self.fc.bias.data.zero_()
 
     def _make_dense(self, nChannels, growthRate, nDenseBlocks, bottleneck):

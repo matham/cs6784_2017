@@ -145,7 +145,8 @@ def main():
     ])
 
     if args.trans:
-        run_transfer(args, optimizer, net, trainTransform, testTransform)
+        res = run_transfer(args, optimizer, net, trainTransform, testTransform)
+        run_transfer_dset_b(args, *res)
     else:
         run(args, optimizer, net, trainTransform, testTransform)
 
@@ -188,14 +189,20 @@ def run(args, optimizer, net, trainTransform, testTransform):
     trainF.close()
     testF.close()
 
-def run_transfer(args, optimizer, net, trainTransform, testTransform):
+def run_transfer(args, optimizer, net, trainTransform, testTransform, resume=False):
     cifar10 = args.cifar == 10
     N = args.cifar
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
-    classes = list(range(N))
-    shuffle(classes)
+    if resume:
+        with open(os.path.join(args.save, 'class_shuffled'), 'r') as fh:
+            classes = list(map(int, fh.read().split(',')))
+    else:
+        classes = list(range(N))
+        shuffle(classes)
+        with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
+            fh.write(','.join(map(str, classes)))
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
@@ -221,28 +228,34 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
 
     best_error = 100
     best_state = net.state_dict()
-    for epoch in range(1, args.nEpochs + 1):
-        adjust_opt(args.opt, optimizer, epoch)
-        train(args, epoch, net, trainLoader, optimizer, trainF)
-        err = test(args, epoch, net, testLoader, optimizer, testF)
+    if not resume:
+        for epoch in range(1, args.nEpochs + 1):
+            adjust_opt(args.opt, optimizer, epoch)
+            train(args, epoch, net, trainLoader, optimizer, trainF)
+            err = test(args, epoch, net, testLoader, optimizer, testF)
 
-        if err < best_error:
-            best_error = err
-            best_state = net.state_dict()
-            print('New best error {}'.format(err))
-            torch.save(best_state, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar)))
+            if err < best_error:
+                best_error = err
+                best_state = net.state_dict()
+                print('New best error {}'.format(err))
+                torch.save(best_state, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar)))
 
-        # os.system('./plot.py {} &'.format(args.save))
+            # os.system('./plot.py {} &'.format(args.save))
 
     trainF.close()
     testF.close()
+    return tran2, test2, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar))
+
+
+def run_transfer_dset_b(args, tran2, test2, filename):
+    cifar10 = args.cifar == 10
 
     net = densenet.DenseNet(growthRate=12, depth=100, reduction=0.5,
                             bottleneck=True, nClasses=(10 if cifar10 else 100))
     if args.cuda:
         net = net.cuda()
 
-    net.load_state_dict(best_state)
+    net.load_state_dict(torch.load(filename))
     net.reset_last_layer()
 
     params = list(net.parameters())
@@ -255,6 +268,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
 
     optimizer = optim.SGD(param_vals, lr=1e-1, momentum=0.9, weight_decay=1e-4)
 
+    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     trainLoader = DataLoader(
         tran2, batch_size=args.batchSz, shuffle=True, **kwargs)
     testLoader = DataLoader(
@@ -265,7 +279,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
 
     best_error = 100
     best_state = net.state_dict()
-    for epoch in range(1, args.nEpochs + 1):
+    for epoch in range(1, 100 + 1):
         adjust_opt_transfer(args.opt, optimizer, epoch)
         train(args, epoch, net, trainLoader, optimizer, trainF)
         err = test(args, epoch, net, testLoader, optimizer, testF)
@@ -343,9 +357,9 @@ def adjust_opt(optAlg, optimizer, epoch):
 
 def adjust_opt_transfer(optAlg, optimizer, epoch):
     fc, base = optimizer.param_groups
-    if epoch == 126:
+    if epoch == 51:
         fc['lr'] = base['lr'] = 1e-2
-    elif epoch == 151:
+    elif epoch == 76:
         fc['lr'] = base['lr'] = 1e-3
 
 if __name__=='__main__':
