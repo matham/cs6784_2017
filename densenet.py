@@ -82,6 +82,8 @@ class DenseNet(nn.Module):
         nChannels = nOutChannels
         self.dense3 = self._make_dense(nChannels, growthRate, nDenseBlocks, bottleneck)
         nChannels += nDenseBlocks*growthRate
+        self.final_chans = nChannels
+        self.n_classes = nClasses
 
         self.bn1 = nn.BatchNorm2d(nChannels)
         self.fc = nn.Linear(nChannels, nClasses)
@@ -95,6 +97,10 @@ class DenseNet(nn.Module):
                 m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
+
+    def reset_last_layer(self):
+        self.fc = nn.Linear(self.final_chans, self.n_classes)
+        self.fc.bias.data.zero_()
 
     def _make_dense(self, nChannels, growthRate, nDenseBlocks, bottleneck):
         layers = []
