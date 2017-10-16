@@ -4,6 +4,8 @@ import argparse
 from PIL import Image
 import torch
 import numpy as np
+import random
+import time
 from random import shuffle
 
 import torch.nn as nn
@@ -85,8 +87,10 @@ def main():
     parser.add_argument('--batchSz', type=int, default=64)
     parser.add_argument('--nEpochs', type=int, default=175)
     parser.add_argument('--trans', action='store_true')
+    parser.add_argument('--transBlocks', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--dataRoot')
+    parser.add_argument('--classes')
     parser.add_argument('--save')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--opt', type=str, default='sgd',
@@ -144,11 +148,17 @@ def main():
         normTransform
     ])
 
+    print(net)
     if args.trans:
         res = run_transfer(args, optimizer, net, trainTransform, testTransform)
-        run_transfer_dset_b(args, *res)
+        if args.transBlocks:
+            run_transfer_dset_b(args, [], *res)
+            run_transfer_dset_b(args, [1], *res)
+            run_transfer_dset_b(args, [1, 2], *res)
+        run_transfer_dset_b(args, [1, 2, 3], *res)
     else:
         run(args, optimizer, net, trainTransform, testTransform)
+
 
 def run(args, optimizer, net, trainTransform, testTransform):
 
@@ -174,6 +184,7 @@ def run(args, optimizer, net, trainTransform, testTransform):
     testF = open(os.path.join(args.save, 'test.csv'), 'w')
 
     best_error = 100
+    ts0 = time.perf_counter()
     for epoch in range(1, args.nEpochs + 1):
         adjust_opt(args.opt, optimizer, epoch)
         train(args, epoch, net, trainLoader, optimizer, trainF)
@@ -188,15 +199,17 @@ def run(args, optimizer, net, trainTransform, testTransform):
 
     trainF.close()
     testF.close()
+    print('Done in {:.2f}s'.format(time.perf_counter() - ts0))
 
-def run_transfer(args, optimizer, net, trainTransform, testTransform, resume=False):
+
+def run_transfer(args, optimizer, net, trainTransform, testTransform):
     cifar10 = args.cifar == 10
     N = args.cifar
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
-    if resume:
-        with open(os.path.join(args.save, 'class_shuffled'), 'r') as fh:
+    if args.classes:
+        with open(args.classes, 'r') as fh:
             classes = list(map(int, fh.read().split(',')))
     else:
         classes = list(range(N))
@@ -209,8 +222,8 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform, resume=Fal
 
     train_set = cifar_cls(
         root=data_root, train=True, download=download, transform=trainTransform)
-    tran1 = SplitCifarDataSet(train_set, classes[:N // 2])
-    tran2 = SplitCifarDataSet(train_set, classes[N // 2:])
+    train1 = SplitCifarDataSet(train_set, classes[:N // 2])
+    train2 = SplitCifarDataSet(train_set, classes[N // 2:])
 
     test_set = cifar_cls(
         root=data_root, train=False,
@@ -219,7 +232,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform, resume=Fal
     test2 = SplitCifarDataSet(test_set, classes[N // 2:])
 
     trainLoader = DataLoader(
-        tran1, batch_size=args.batchSz, shuffle=True, **kwargs)
+        train1, batch_size=args.batchSz, shuffle=True, **kwargs)
     testLoader = DataLoader(
         test1, batch_size=args.batchSz, shuffle=False, **kwargs)
 
@@ -228,26 +241,28 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform, resume=Fal
 
     best_error = 100
     best_state = net.state_dict()
-    if not resume:
-        for epoch in range(1, args.nEpochs + 1):
-            adjust_opt(args.opt, optimizer, epoch)
-            train(args, epoch, net, trainLoader, optimizer, trainF)
-            err = test(args, epoch, net, testLoader, optimizer, testF)
+    ts0 = time.perf_counter()
+    for epoch in range(1, 175 + 1):
+        adjust_opt(args.opt, optimizer, epoch)
+        train(args, epoch, net, trainLoader, optimizer, trainF)
+        err = test(args, epoch, net, testLoader, optimizer, testF)
 
-            if err < best_error:
-                best_error = err
-                best_state = net.state_dict()
-                print('New best error {}'.format(err))
-                torch.save(best_state, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar)))
+        if err < best_error:
+            best_error = err
+            best_state = net.state_dict()
+            print('New best error {}'.format(err))
+            torch.save(best_state, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar)))
 
-            # os.system('./plot.py {} &'.format(args.save))
+        # os.system('./plot.py {} &'.format(args.save))
 
     trainF.close()
     testF.close()
-    return tran2, test2, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar))
+    print('Done in {:.2f}s'.format(time.perf_counter() - ts0))
+    return train2, test2, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar))
 
 
-def run_transfer_dset_b(args, tran2, test2, filename):
+def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
+    print('Start transfer training with ft={}'.format(ft_blocks))
     cifar10 = args.cifar == 10
 
     net = densenet.DenseNet(growthRate=12, depth=100, reduction=0.5,
@@ -256,31 +271,38 @@ def run_transfer_dset_b(args, tran2, test2, filename):
         net = net.cuda()
 
     net.load_state_dict(torch.load(filename))
-    net.reset_last_layer()
+    net.reset_layers(ft_blocks)
+    ft_params, reset_params = net.split_transfer_params(ft_blocks)
 
-    params = list(net.parameters())
-    fc_params = list(net.fc.parameters())
-    base_params = [p for p in params if not [fc_p for fc_p in fc_params if fc_p is p]]
-    param_vals = [
-        {'params': fc_params, 'lr': 1e-1},
-        {'params': base_params, 'lr': 1e-2}
-    ]
+    if ft_blocks:
+        param_vals = [
+            {'params': reset_params, 'lr': 1e-1},
+            {'params': ft_params, 'lr': 1e-2}
+        ]
+        opt_func = adjust_opt_transfer
+        epochs = 100
+    else:
+        param_vals = reset_params + ft_params
+        opt_func = adjust_opt_transfer_baseline
+        epochs = 275
+    experiment = ','.join(map(str, ft_blocks))
 
     optimizer = optim.SGD(param_vals, lr=1e-1, momentum=0.9, weight_decay=1e-4)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     trainLoader = DataLoader(
-        tran2, batch_size=args.batchSz, shuffle=True, **kwargs)
+        train2, batch_size=args.batchSz, shuffle=True, **kwargs)
     testLoader = DataLoader(
         test2, batch_size=args.batchSz, shuffle=False, **kwargs)
 
-    trainF = open(os.path.join(args.save, 'train2.csv'), 'w')
-    testF = open(os.path.join(args.save, 'test2.csv'), 'w')
+    trainF = open(os.path.join(args.save, 'train_ft=[{}].csv'.format(experiment)), 'w')
+    testF = open(os.path.join(args.save, 'test_ft=[{}].csv'.format(experiment)), 'w')
 
     best_error = 100
     best_state = net.state_dict()
-    for epoch in range(1, 100 + 1):
-        adjust_opt_transfer(args.opt, optimizer, epoch)
+    ts0 = time.perf_counter()
+    for epoch in range(1, epochs + 1):
+        opt_func(args.opt, optimizer, epoch)
         train(args, epoch, net, trainLoader, optimizer, trainF)
         err = test(args, epoch, net, testLoader, optimizer, testF)
 
@@ -288,18 +310,24 @@ def run_transfer_dset_b(args, tran2, test2, filename):
             best_error = err
             best_state = net.state_dict()
             print('New best error {}'.format(err))
-            torch.save(best_state, os.path.join(args.save, 'model_cifar{}_trans.t7'.format(args.cifar)))
+            torch.save(
+                best_state,
+                os.path.join(args.save, 'model_cifar{}_trans_ft=[{}].t7'.format(args.cifar, experiment)))
 
         # os.system('./plot.py {} &'.format(args.save))
 
     trainF.close()
     testF.close()
+    print('Done in {:.2f}s'.format(time.perf_counter() - ts0))
+
 
 def train(args, epoch, net, trainLoader, optimizer, trainF):
     net.train()
     nProcessed = 0
     nTrain = len(trainLoader.dataset)
+    ts0 = time.perf_counter()
     for batch_idx, (data, target) in enumerate(trainLoader):
+        ts0_batch = time.perf_counter()
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data), Variable(target)
@@ -314,17 +342,20 @@ def train(args, epoch, net, trainLoader, optimizer, trainF):
         incorrect = pred.ne(target.data).cpu().sum()
         err = 100.*incorrect/len(data)
         partialEpoch = epoch + batch_idx / len(trainLoader) - 1
-        print('Train Epoch: {:.2f} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tError: {:.6f}'.format(
+        te = time.perf_counter()
+        print('Train Epoch: {:.2f} [{}/{} ({:.0f}%)]\tTime: [{:.2f}s/{:.2f}s]\tLoss: {:.6f}\tError: {:.6f}'.format(
             partialEpoch, nProcessed, nTrain, 100. * batch_idx / len(trainLoader),
-            loss.data[0], err))
+            te - ts0_batch, te - ts0, loss.data[0], err))
 
         trainF.write('{},{},{}\n'.format(partialEpoch, loss.data[0], err))
         trainF.flush()
+
 
 def test(args, epoch, net, testLoader, optimizer, testF):
     net.eval()
     test_loss = 0
     incorrect = 0
+    ts0 = time.perf_counter()
     for data, target in testLoader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
@@ -338,22 +369,28 @@ def test(args, epoch, net, testLoader, optimizer, testF):
     test_loss /= len(testLoader) # loss function already averages over batch size
     nTotal = len(testLoader.dataset)
     err = 100.*incorrect/nTotal
-    print('\nTest set: Average loss: {:.4f}, Error: {}/{} ({:.0f}%)\n'.format(
-        test_loss, incorrect, nTotal, err))
+    print('\nTest set: Time: {:.2f}s, Average loss: {:.4f}, Error: {}/{} ({:.0f}%)\n'.format(
+        time.perf_counter() - ts0, test_loss, incorrect, nTotal, err))
 
     testF.write('{},{},{}\n'.format(epoch, test_loss, err))
     testF.flush()
     return err
 
+
 def adjust_opt(optAlg, optimizer, epoch):
     if optAlg == 'sgd':
-        if epoch == 1: lr = 1e-1
-        elif epoch == 126: lr = 1e-2
-        elif epoch == 151: lr = 1e-3
-        else: return
+        if epoch == 1:
+            lr = 1e-1
+        elif epoch == 126:
+            lr = 1e-2
+        elif epoch == 151:
+            lr = 1e-3
+        else:
+            return
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
+
 
 def adjust_opt_transfer(optAlg, optimizer, epoch):
     fc, base = optimizer.param_groups
@@ -361,6 +398,16 @@ def adjust_opt_transfer(optAlg, optimizer, epoch):
         fc['lr'] = base['lr'] = 1e-2
     elif epoch == 76:
         fc['lr'] = base['lr'] = 1e-3
+
+
+def adjust_opt_transfer_baseline(optAlg, optimizer, epoch):
+    if epoch == 126:
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = 1e-2
+    elif epoch == 226:
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = 1e-3
+
 
 if __name__=='__main__':
     main()

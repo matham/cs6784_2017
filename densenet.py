@@ -58,8 +58,15 @@ class Transition(nn.Module):
 
 
 class DenseNet(nn.Module):
+
+    layer_funcs = {}
+
     def __init__(self, growthRate, depth, reduction, nClasses, bottleneck):
         super(DenseNet, self).__init__()
+
+        self.layer_funcs = {1: self.get_first_dense_block_layers,
+                            2: self.get_second_dense_block_layers,
+                            3: self.get_third_dense_block_layers}
 
         nDenseBlocks = (depth-4) // 3
         if bottleneck:
@@ -89,18 +96,65 @@ class DenseNet(nn.Module):
         self.fc = nn.Linear(nChannels, nClasses)
 
         for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            elif isinstance(m, nn.Linear):
-                m.bias.data.zero_()
+            self.set_layer_params(m)
 
-    def reset_last_layer(self):
-        self.fc.reset_parameters()
-        self.fc.bias.data.zero_()
+    def set_layer_params(self, m):
+        if isinstance(m, nn.Conv2d):
+            n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            m.weight.data.normal_(0, math.sqrt(2. / n))
+        elif isinstance(m, nn.BatchNorm2d):
+            m.weight.data.fill_(1)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.Linear):
+            m.bias.data.zero_()
+
+    def reset_layers(self, ft_blocks):
+        reset_layers = [self.fc]
+        for i in range(1, 4):
+            if i not in ft_blocks:
+                reset_layers.extend(self.layer_funcs[i]())
+
+        for layer in reset_layers:
+            layer.reset_parameters()
+            self.set_layer_params(layer)
+
+    def split_transfer_params(self, ft_blocks):
+        reset_layers = [self.fc]
+        for i in range(1, 4):
+            if i not in ft_blocks:
+                reset_layers.extend(self.layer_funcs[i]())
+
+        params = list(self.parameters())
+        reset_params = []
+        for layer in reset_layers:
+            reset_params.extend(layer.parameters())
+
+        ft_params = [p for p in params if not [r_p for r_p in reset_params if r_p is p]]
+        return ft_params, reset_params
+
+    def get_first_dense_block_layers(self):
+        layers = [
+            layer for group in self.dense1.children()
+            for layer in group.children()]
+        layers.append(self.conv1)
+        for layer in self.trans1.children():
+            layers.append(layer)
+        return layers
+
+    def get_second_dense_block_layers(self):
+        layers = [
+            layer for group in self.dense2.children()
+            for layer in group.children()]
+        for layer in self.trans2.children():
+            layers.append(layer)
+        return layers
+
+    def get_third_dense_block_layers(self):
+        layers = [
+            layer for group in self.dense3.children()
+            for layer in group.children()]
+        layers.append(self.bn1)
+        return layers
 
     def _make_dense(self, nChannels, growthRate, nDenseBlocks, bottleneck):
         layers = []
