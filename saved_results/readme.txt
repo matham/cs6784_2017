@@ -25,3 +25,12 @@ cifar100-transfer-finetune-blocks
 
 50/50 random split. Train on A, then fine tune on B. We fined tuned on B by either resetting dense blocks 3, 2-3, 1-3 or resetting just the final fc layer.
 
+---------------------------
+10/16
+ayons PC
+d9417cd5c3e07f50cc1e348c791b12321b89f7e6
+cifar100-transfer-finetune-blocks-nat_vs._unnat
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --transBlocks --transNatSplit | tee log
+
+65/35 natural vs human made split. Train on A, then fine tune on B. We fined tuned on B by either resetting dense blocks 3, 2-3, 1-3 or resetting just the final fc layer.
+
