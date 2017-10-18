@@ -27,6 +27,7 @@ import math
 import shutil
 
 import densenet
+from attic.label_cifar import unnatural_labels, natural_labels
 import make_graph
 
 
@@ -88,6 +89,7 @@ def main():
     parser.add_argument('--nEpochs', type=int, default=175)
     parser.add_argument('--trans', action='store_true')
     parser.add_argument('--transBlocks', action='store_true')
+    parser.add_argument('--transNatSplit', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
@@ -208,28 +210,32 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
-    if args.classes:
-        with open(args.classes, 'r') as fh:
-            classes = list(map(int, fh.read().split(',')))
+    if args.transNatSplit:
+        set1, set2 = natural_labels, unnatural_labels
     else:
-        classes = list(range(N))
-        shuffle(classes)
-        with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
-            fh.write(','.join(map(str, classes)))
+        if args.classes:
+            with open(args.classes, 'r') as fh:
+                classes = list(map(int, fh.read().split(',')))
+        else:
+            classes = list(range(N))
+            shuffle(classes)
+            with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
+                fh.write(','.join(map(str, classes)))
+        set1, set2 = classes[:N // 2], classes[N // 2:]
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
 
     train_set = cifar_cls(
         root=data_root, train=True, download=download, transform=trainTransform)
-    train1 = SplitCifarDataSet(train_set, classes[:N // 2])
-    train2 = SplitCifarDataSet(train_set, classes[N // 2:])
+    train1 = SplitCifarDataSet(train_set, set1)
+    train2 = SplitCifarDataSet(train_set, set2)
 
     test_set = cifar_cls(
         root=data_root, train=False,
         download=download, transform=testTransform)
-    test1 = SplitCifarDataSet(test_set, classes[:N // 2])
-    test2 = SplitCifarDataSet(test_set, classes[N // 2:])
+    test1 = SplitCifarDataSet(test_set, set1)
+    test2 = SplitCifarDataSet(test_set, set2)
 
     trainLoader = DataLoader(
         train1, batch_size=args.batchSz, shuffle=True, **kwargs)
