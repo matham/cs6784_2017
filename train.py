@@ -90,6 +90,7 @@ def main():
     parser.add_argument('--trans', action='store_true')
     parser.add_argument('--transBlocks', action='store_true')
     parser.add_argument('--transNatSplit', action='store_true')
+    parser.add_argument('--transSplit', type=int, default=50)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
@@ -221,7 +222,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             shuffle(classes)
             with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
                 fh.write(','.join(map(str, classes)))
-        set1, set2 = classes[:N // 2], classes[N // 2:]
+        set1, set2 = classes[:args.transSplit], classes[args.transSplit:]
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
