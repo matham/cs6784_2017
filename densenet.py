@@ -110,9 +110,15 @@ class DenseNet(nn.Module):
 
     def reset_layers(self, ft_blocks):
         reset_layers = [self.fc]
+        blocks_skipped = {b[0] if isinstance(b, tuple) else b for b in ft_blocks}
         for i in range(1, 4):
-            if i not in ft_blocks:
+            if i not in blocks_skipped:
                 reset_layers.extend(self.layer_funcs[i]())
+
+        for block in ft_blocks:
+            if isinstance(block, tuple):
+                block, layer = block
+                reset_layers.extend(self.layer_funcs[block](layer))
 
         for layer in reset_layers:
             layer.reset_parameters()
@@ -120,9 +126,15 @@ class DenseNet(nn.Module):
 
     def split_transfer_params(self, ft_blocks):
         reset_layers = [self.fc]
+        blocks_skipped = {b[0] if isinstance(b, tuple) else b for b in ft_blocks}
         for i in range(1, 4):
-            if i not in ft_blocks:
+            if i not in blocks_skipped:
                 reset_layers.extend(self.layer_funcs[i]())
+
+        for block in ft_blocks:
+            if isinstance(block, tuple):
+                block, layer = block
+                reset_layers.extend(self.layer_funcs[block](layer))
 
         params = list(self.parameters())
         reset_params = []
@@ -132,26 +144,27 @@ class DenseNet(nn.Module):
         ft_params = [p for p in params if not [r_p for r_p in reset_params if r_p is p]]
         return ft_params, reset_params
 
-    def get_first_dense_block_layers(self):
+    def get_first_dense_block_layers(self, layer=0):
         layers = [
-            layer for group in self.dense1.children()
+            layer for group in list(self.dense1.children())[layer:]
             for layer in group.children()]
-        layers.append(self.conv1)
+        if not layer:
+            layers.append(self.conv1)
         for layer in self.trans1.children():
             layers.append(layer)
         return layers
 
-    def get_second_dense_block_layers(self):
+    def get_second_dense_block_layers(self, layer=0):
         layers = [
-            layer for group in self.dense2.children()
+            layer for group in list(self.dense2.children())[layer:]
             for layer in group.children()]
         for layer in self.trans2.children():
             layers.append(layer)
         return layers
 
-    def get_third_dense_block_layers(self):
+    def get_third_dense_block_layers(self, layer=0):
         layers = [
-            layer for group in self.dense3.children()
+            layer for group in list(self.dense3.children())[layer:]
             for layer in group.children()]
         layers.append(self.bn1)
         return layers

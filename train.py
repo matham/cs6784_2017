@@ -89,12 +89,15 @@ def main():
     parser.add_argument('--nEpochs', type=int, default=175)
     parser.add_argument('--trans', action='store_true')
     parser.add_argument('--transBlocks', action='store_true')
+    parser.add_argument('--nTransFTBlockLayersStep', type=int, default=2)
+    parser.add_argument('--transFTBlock', type=int, default=0)
     parser.add_argument('--transNatSplit', action='store_true')
     parser.add_argument('--transSplit', type=int, default=50)
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
     parser.add_argument('--save')
+    parser.add_argument('--preTrainedModel')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--opt', type=str, default='sgd',
                         choices=('sgd', 'adam', 'rmsprop'))
@@ -158,7 +161,15 @@ def main():
             run_transfer_dset_b(args, [], *res)
             run_transfer_dset_b(args, [1], *res)
             run_transfer_dset_b(args, [1, 2], *res)
-        run_transfer_dset_b(args, [1, 2, 3], *res)
+
+        if args.transFTBlock:
+            block = args.transFTBlock
+            blocks = list(range(1, block + 1))
+            for i in range(0, 16, args.nTransFTBlockLayersStep):
+                blocks[-1] = (block, i + 1)
+                run_transfer_dset_b(args, blocks, *res)
+        else:
+            run_transfer_dset_b(args, [1, 2, 3], *res)
     else:
         run(args, optimizer, net, trainTransform, testTransform)
 
@@ -243,29 +254,34 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
     testLoader = DataLoader(
         test1, batch_size=args.batchSz, shuffle=False, **kwargs)
 
-    trainF = open(os.path.join(args.save, 'train1.csv'), 'w')
-    testF = open(os.path.join(args.save, 'test1.csv'), 'w')
+    if args.preTrainedModel:
+        fname = args.preTrainedModel
+    else:
+        trainF = open(os.path.join(args.save, 'train1.csv'), 'w')
+        testF = open(os.path.join(args.save, 'test1.csv'), 'w')
 
-    best_error = 100
-    best_state = net.state_dict()
-    ts0 = time.perf_counter()
-    for epoch in range(1, 175 + 1):
-        adjust_opt(args.opt, optimizer, epoch)
-        train(args, epoch, net, trainLoader, optimizer, trainF)
-        err = test(args, epoch, net, testLoader, optimizer, testF)
+        best_error = 100
+        # best_state = net.state_dict()
+        ts0 = time.perf_counter()
+        for epoch in range(1, 175 + 1):
+            adjust_opt(args.opt, optimizer, epoch)
+            train(args, epoch, net, trainLoader, optimizer, trainF)
+            err = test(args, epoch, net, testLoader, optimizer, testF)
 
-        if err < best_error:
-            best_error = err
-            best_state = net.state_dict()
-            print('New best error {}'.format(err))
-            torch.save(best_state, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar)))
+            if err < best_error:
+                best_error = err
+                best_state = net.state_dict()
+                print('New best error {}'.format(err))
+                torch.save(best_state, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar)))
 
-        # os.system('./plot.py {} &'.format(args.save))
+            # os.system('./plot.py {} &'.format(args.save))
 
-    trainF.close()
-    testF.close()
-    print('Done in {:.2f}s'.format(time.perf_counter() - ts0))
-    return train2, test2, os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar))
+        trainF.close()
+        testF.close()
+        print('Done in {:.2f}s'.format(time.perf_counter() - ts0))
+        fname = os.path.join(args.save, 'model_cifar{}_base.t7'.format(args.cifar))
+
+    return train2, test2, fname
 
 
 def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
@@ -292,7 +308,13 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
         param_vals = reset_params + ft_params
         opt_func = adjust_opt_transfer_baseline
         epochs = 275
-    experiment = ','.join(map(str, ft_blocks))
+
+    items = []
+    for block in ft_blocks:
+        if isinstance(block, tuple):
+            block = '{}={}'.format(*block)
+        items.append(block)
+    experiment = ','.join(map(str, items))
 
     optimizer = optim.SGD(param_vals, lr=1e-1, momentum=0.9, weight_decay=1e-4)
 
