@@ -40,5 +40,15 @@ ayons PC
 6242139ebcd546b9db803f00c6610cf06c2d8862
 cifar100-transfer-finetune-blocks-65-35_split
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --transBlocks --transSplit 65 | tee log
+
 65/35 random split. Train on A, then fine tune on B. We fined tuned on B by either resetting dense blocks 3, 2-3, 1-3 or resetting just the final fc layer.
+
+-------------------------------
+10/18
+prajna
+2871f954be2deec5694b754d0fccaa01d544ac8d
+cifar100-transfer-finetune-blocks2
+(pytorch) root@cdbbf1597042:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --transBlocks | tee log
+
+Run again 50/50 random split. Train on A, then fine tune on B. We fined tuned on B by either resetting dense blocks 3, 2-3, 1-3 or resetting just the final fc layer.
 
