@@ -52,3 +52,12 @@ cifar100-transfer-finetune-blocks2
 
 Run again 50/50 random split. Train on A, then fine tune on B. We fined tuned on B by either resetting dense blocks 3, 2-3, 1-3 or resetting just the final fc layer.
 
+-------------------------------
+10/19
+ayons PC
+159a22399bbdd2c75f419fdcddde714dd5e105bc
+cifar100-transfer-finetune-layers
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --nTransFTBlockLayersStep 2 --transFTBlock 2 --classes /root/Desktop/shared_docker/cs6784_2017/class_shuffled --preTrainedModel /root/Desktop/shared_docker/cs6784_2017/model_cifar100_base.t7 --transSplit 65 | tee log
+
+65/35 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 2 starting from layer n for n in range(0, 16, 2). Where 16 is the number of layers in the block. The baseline model came from cifar100-transfer-finetune-blocks-65-35_split.
+
