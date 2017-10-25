@@ -97,3 +97,12 @@ cifar100-transfer-binary-classifier1.1
 
 Fine-tuned on B the model create in cifar100-transfer-binary-classifier on A.
 
+---------------------------------
+10/25
+Ayons PC
+e7c5deebb0d1280df47cd98d12ba55d402cf1009
+cifar100-transfer-binary-classifier2.2
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes /root/Desktop/shared_docker/cs6784_2017/class_shuffled --preTrainedModel /root/Desktop/shared_docker/cs6784_2017/model_cifar100_base.t7 --binClasses 1 --binWeight 1 | tee log
+
+Fine-tuned on B the model create in cifar100-transfer-binary-classifier2 on A.
+
