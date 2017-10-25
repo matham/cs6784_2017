@@ -88,5 +88,12 @@ cifar100-transfer-binary-classifier2
 
 50/50 random split. Train on A by adding a single binary classifier with no FC layer.
 
+--------------------------------
+10/25
+Prajna
+bf219f9a9ef204277fab08f54aeeac4b1aafc02c
+cifar100-transfer-binary-classifier1.1
+(pytorch) root@cdbbf1597042:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes /root/Desktop/shared-docker/python/cifar/class_shuffled --preTrainedModel /root/Desktop/shared-docker/python/cifar/model_cifar100_base.t7 --binWeight .9 --binClasses 1 | tee log
 
+Fine-tuned on B the model create in cifar100-transfer-binary-classifier on A.
 
