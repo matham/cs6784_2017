@@ -61,12 +61,18 @@ class DenseNet(nn.Module):
 
     layer_funcs = {}
 
-    def __init__(self, growthRate, depth, reduction, nClasses, bottleneck):
+    binary_layers = []
+
+    binary_only = False
+
+    def __init__(self, growthRate, depth, reduction, nClasses, bottleneck, n_binary_class=0,
+                 binary_only=False):
         super(DenseNet, self).__init__()
 
         self.layer_funcs = {1: self.get_first_dense_block_layers,
                             2: self.get_second_dense_block_layers,
                             3: self.get_third_dense_block_layers}
+        self.binary_only = binary_only
 
         nDenseBlocks = (depth-4) // 3
         if bottleneck:
@@ -93,7 +99,12 @@ class DenseNet(nn.Module):
         self.n_classes = nClasses
 
         self.bn1 = nn.BatchNorm2d(nChannels)
-        self.fc = nn.Linear(nChannels, nClasses)
+        if not binary_only:
+            self.fc = nn.Linear(nChannels, nClasses)
+        self.binary_layers = bins = []
+        for i in range(n_binary_class):
+            bins.append(nn.Linear(nChannels, 2))
+            setattr(self, 'bin_fc{}'.format(i), bins[-1])
 
         for m in self.modules():
             self.set_layer_params(m)
@@ -109,7 +120,8 @@ class DenseNet(nn.Module):
             m.bias.data.zero_()
 
     def reset_layers(self, ft_blocks):
-        reset_layers = [self.fc]
+        reset_layers = [self.fc] if not self.binary_only else []
+        reset_layers.extend(self.binary_layers)
         blocks_skipped = {b[0] if isinstance(b, tuple) else b for b in ft_blocks}
         for i in range(1, 4):
             if i not in blocks_skipped:
@@ -125,7 +137,8 @@ class DenseNet(nn.Module):
             self.set_layer_params(layer)
 
     def split_transfer_params(self, ft_blocks):
-        reset_layers = [self.fc]
+        reset_layers = [self.fc] if not self.binary_only else []
+        reset_layers.extend(self.binary_layers)
         blocks_skipped = {b[0] if isinstance(b, tuple) else b for b in ft_blocks}
         for i in range(1, 4):
             if i not in blocks_skipped:
@@ -185,5 +198,16 @@ class DenseNet(nn.Module):
         out = self.trans2(self.dense2(out))
         out = self.dense3(out)
         out = torch.squeeze(F.avg_pool2d(F.relu(self.bn1(out)), 8))
-        out = F.log_softmax(self.fc(out))
-        return out
+
+        binary_out = []
+        for layer in self.binary_layers:
+            binary_out.append(F.log_softmax(layer(out)))
+
+        if self.binary_only:
+            return binary_out
+
+        binary_out.insert(0, F.log_softmax(self.fc(out)))
+
+        if len(binary_out) == 1:
+            return binary_out[0]
+        return binary_out
