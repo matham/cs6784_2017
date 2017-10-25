@@ -70,4 +70,13 @@ cifar100-transfer-finetune-layers2
 
 50/50 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 2 starting from layer n for n in range(0, 16, 2). Where 16 is the number of layers in the block. The baseline model came from cifar100-transfer-finetune-blocks2.
 
+-------------------------------
+10/23
+prajna
+87c3c55e925c7a8e97aaac35ee0dbbd5264e8462
+cifar100-transfer-binary-classifier
+(pytorch) root@cdbbf1597042:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .9 | tee log
+
+50/50 random split. Train on A by adding a single binary classifier with loss weight .9 and the cifar FC layer with weight .1.
+
 
