@@ -307,7 +307,9 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     if args.cuda:
         net = net.cuda()
 
-    net.load_state_dict(torch.load(filename))
+    state = net.state_dict()
+    state.update(torch.load(filename))
+    net.load_state_dict(state)
     net.reset_layers(ft_blocks)
     ft_params, reset_params = net.split_transfer_params(ft_blocks)
 
