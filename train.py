@@ -173,8 +173,6 @@ def main():
             for i in range(0, 16, args.nTransFTBlockLayersStep):
                 blocks[-1] = (block, i + 1)
                 run_transfer_dset_b(args, blocks, *res)
-        elif args.binClasses:
-            pass
         else:
             run_transfer_dset_b(args, [1, 2, 3], *res)
     else:
@@ -301,8 +299,11 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     print('Start transfer training with ft={}'.format(ft_blocks))
     cifar10 = args.cifar == 10
 
-    net = densenet.DenseNet(growthRate=12, depth=100, reduction=0.5,
-                            bottleneck=True, nClasses=(10 if cifar10 else 100))
+    net = densenet.DenseNet(
+        growthRate=12, depth=100, reduction=0.5,
+        bottleneck=True, nClasses=(10 if cifar10 else 100),
+        n_binary_class=args.binClasses, binary_only=False
+    )
     if args.cuda:
         net = net.cuda()
 
@@ -345,8 +346,8 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     ts0 = time.perf_counter()
     for epoch in range(1, epochs + 1):
         opt_func(args.opt, optimizer, epoch)
-        train(args, epoch, net, trainLoader, optimizer, trainF)
-        err = test(args, epoch, net, testLoader, optimizer, testF)
+        train(args, epoch, net, trainLoader, optimizer, trainF, [])
+        err = test(args, epoch, net, testLoader, optimizer, testF, [])
 
         if err < best_error:
             best_error = err
@@ -394,6 +395,8 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
 
         optimizer.zero_grad()
         output = net(data)
+        if args.binClasses and not bin_labels:
+            output = output[0]
 
         if bin_labels:
             if binary_only:
@@ -462,6 +465,8 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
             bin_targets.append(Variable(labels))
 
         output = net(data)
+        if args.binClasses and not bin_labels:
+            output = output[0]
 
         if bin_labels:
             s = 1 if binary_only else 0

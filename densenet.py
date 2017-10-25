@@ -99,8 +99,7 @@ class DenseNet(nn.Module):
         self.n_classes = nClasses
 
         self.bn1 = nn.BatchNorm2d(nChannels)
-        if not binary_only:
-            self.fc = nn.Linear(nChannels, nClasses)
+        self.fc = nn.Linear(nChannels, nClasses)
         self.binary_layers = bins = []
         for i in range(n_binary_class):
             bins.append(nn.Linear(nChannels, 2))
