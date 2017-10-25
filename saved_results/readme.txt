@@ -79,4 +79,14 @@ cifar100-transfer-binary-classifier
 
 50/50 random split. Train on A by adding a single binary classifier with loss weight .9 and the cifar FC layer with weight .1.
 
+-------------------------------
+10/23
+ayons PC
+87c3c55e925c7a8e97aaac35ee0dbbd5264e8462
+cifar100-transfer-binary-classifier2
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight 1 | tee log
+
+50/50 random split. Train on A by adding a single binary classifier with no FC layer.
+
+
 
