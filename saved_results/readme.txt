@@ -106,3 +106,21 @@ cifar100-transfer-binary-classifier2.2
 
 Fine-tuned on B the model create in cifar100-transfer-binary-classifier2 on A.
 
+----------------------------------
+10/26
+Prajna
+bfbe30ac1c6d815dff4ad859146ab784ec37f650
+cifar100-transfer-binary-classifier3
+(pytorch) root@cdbbf1597042:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binWeight .67 --binClasses 1 | tee log
+
+50/50 random split. Train on A by adding a single binary classifier with loss weight .67 and a FC layer then fine tune on B.
+
+----------------------------------
+10/26
+Ayons PC
+bfbe30ac1c6d815dff4ad859146ab784ec37f650
+cifar100-transfer-binary-classifier4
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .85 | tee log
+
+50/50 random split. Train on A by adding a single binary classifier with loss weight .85 and a FC layer then fine tune on B.
+
