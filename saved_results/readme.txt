@@ -124,3 +124,12 @@ cifar100-transfer-binary-classifier4
 
 50/50 random split. Train on A by adding a single binary classifier with loss weight .85 and a FC layer then fine tune on B.
 
+----------------------------------
+10/26
+Prajna
+bfbe30ac1c6d815dff4ad859146ab784ec37f650
+cifar100-transfer-binary-classifier5
+(pytorch) root@cdbbf1597042:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binWeight .67 --binClasses 4 | tee log
+
+50/50 random split. Train on A by adding 4 binary classifiers with loss weight .67 and a FC layer then fine tune on B.
+
