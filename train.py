@@ -420,15 +420,20 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
         if bin_labels:
             errors = []
             s = 1 if binary_only else 0
+            fc_err = 0
             for i, (bin_output, bin_target) in enumerate(zip(output, targets[s:])):
                 pred = bin_output.data.max(1)[1]  # get the index of the max log-probability
                 incorrect = pred.ne(bin_target.data).cpu().sum()
-                errors.append(incorrect / len(data) * 100 * (fc_weight if not binary_only and not i else bin_weight))
+                if not binary_only and not i:
+                    errors.append(incorrect / len(data) * 100 * fc_weight)
+                    fc_err = incorrect / len(data) * 100
+                else:
+                    errors.append(incorrect / len(data) * 100 * bin_weight)
             err = sum(errors)
         else:
             pred = output.data.max(1)[1] # get the index of the max log-probability
             incorrect = pred.ne(target.data).cpu().sum()
-            err = 100.*incorrect/len(data)
+            fc_err = err = 100.*incorrect/len(data)
 
         partialEpoch = epoch + batch_idx / len(trainLoader) - 1
         te = time.perf_counter()
@@ -436,7 +441,7 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
             partialEpoch, nProcessed, nTrain, 100. * batch_idx / len(trainLoader),
             te - ts0_batch, te - ts0, loss.data[0], err))
 
-        trainF.write('{},{},{}\n'.format(partialEpoch, loss.data[0], err))
+        trainF.write('{},{},{},{}\n'.format(partialEpoch, loss.data[0], err, fc_err))
         trainF.flush()
 
 
@@ -444,6 +449,7 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
     net.eval()
     test_loss = 0
     incorrect = 0
+    fc_incorrect = 0
 
     bin_weight = args.binWeight * 1 / len(bin_labels) if bin_labels else 0
     fc_weight = 1. - args.binWeight
@@ -479,11 +485,18 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
 
             for i, (bin_output, bin_target) in enumerate(zip(output, bin_targets[s:])):
                 pred = bin_output.data.max(1)[1]  # get the index of the max log-probability
-                incorrect += pred.ne(bin_target.data).cpu().sum() * (fc_weight if not binary_only and not i else bin_weight)
+                diff = pred.ne(bin_target.data).cpu().sum()
+                if not binary_only and not i:
+                    incorrect += diff * fc_weight
+                    fc_incorrect += diff
+
+                else:
+                    incorrect += diff * bin_weight
         else:
             test_loss += F.nll_loss(output, target).data[0]
             pred = output.data.max(1)[1] # get the index of the max log-probability
             incorrect += pred.ne(target.data).cpu().sum()
+            fc_incorrect = incorrect
 
     test_loss = test_loss
     test_loss /= len(testLoader) # loss function already averages over batch size
@@ -492,7 +505,7 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
     print('\nTest set: Time: {:.2f}s, Average loss: {:.4f}, Error: {}/{} ({:.0f}%)\n'.format(
         time.perf_counter() - ts0, test_loss, incorrect, nTotal, err))
 
-    testF.write('{},{},{}\n'.format(epoch, test_loss, err))
+    testF.write('{},{},{},{}\n'.format(epoch, test_loss, err, 100 * fc_incorrect / nTotal))
     testF.flush()
     return err
 
