@@ -118,6 +118,14 @@ class DenseNet(nn.Module):
         elif isinstance(m, nn.Linear):
             m.bias.data.zero_()
 
+    def reset_final_layer(self):
+        reset_layers = [self.fc] if not self.binary_only else []
+        reset_layers.extend(self.binary_layers)
+
+        for layer in reset_layers:
+            layer.reset_parameters()
+            self.set_layer_params(layer)
+
     def reset_layers(self, ft_blocks):
         reset_layers = [self.fc] if not self.binary_only else []
         reset_layers.extend(self.binary_layers)
@@ -147,6 +155,18 @@ class DenseNet(nn.Module):
             if isinstance(block, tuple):
                 block, layer = block
                 reset_layers.extend(self.layer_funcs[block](layer))
+
+        params = list(self.parameters())
+        reset_params = []
+        for layer in reset_layers:
+            reset_params.extend(layer.parameters())
+
+        ft_params = [p for p in params if not [r_p for r_p in reset_params if r_p is p]]
+        return ft_params, reset_params
+
+    def split_final_params(self):
+        reset_layers = [self.fc] if not self.binary_only else []
+        reset_layers.extend(self.binary_layers)
 
         params = list(self.parameters())
         reset_params = []

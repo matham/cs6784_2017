@@ -7,6 +7,7 @@ import numpy as np
 import random
 import time
 from random import shuffle
+import os
 
 import torch.nn as nn
 import torch.optim as optim
@@ -16,6 +17,7 @@ from torch.autograd import Variable
 
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
+from densenet_vision import DenseNet as DenseNetVision
 from torchvision.utils import save_image
 
 from torch.utils.data import DataLoader, Dataset
@@ -28,7 +30,32 @@ import shutil
 
 import densenet
 from attic.label_cifar import unnatural_labels, natural_labels
+from densenet_efficient import DenseNetEfficient
 import make_graph
+
+imagenet100 = {
+    5, 6, 7, 15, 27, 50, 55, 73, 76, 80, 96, 104, 105, 106, 107, 130, 135, 152, 179, 185, 188, 208, 248,
+    252, 264, 278, 314, 317, 330, 338, 355, 360, 371, 389, 397, 402, 404, 409, 413, 416, 433, 434, 456,
+    471, 478, 481, 490, 491, 519, 530, 534, 535, 546, 555, 558, 566, 579, 581, 600, 609, 628, 634, 652,
+    654, 659, 672, 681, 686, 688, 690, 693, 700, 708, 723, 746, 753, 769, 775, 802, 808, 814, 816, 837,
+    858, 867, 875, 877, 881, 882, 919, 934, 938, 941, 955, 961, 971, 976, 986, 987, 996}
+
+
+class ImageFolderSubset(dset.folder.ImageFolder):
+
+    original_idx = []
+
+    def __init__(self, included_classes, *largs, **kwargs):
+        super(ImageFolderSubset, self).__init__(*largs, **kwargs)
+        self.original_idx = [
+            i for i, (_, cls) in enumerate(self.imgs) if cls in included_classes]
+
+    def __getitem__(self, index):
+        return super(ImageFolderSubset, self).__getitem__(self.original_idx[index])
+
+    def __len__(self):
+        return len(self.original_idx)
+
 
 
 class SplitCifarDataSet(Dataset):
@@ -95,6 +122,7 @@ def main():
     parser.add_argument('--transSplit', type=int, default=50)
     parser.add_argument('--binClasses', type=int, default=0)
     parser.add_argument('--binWeight', type=float, default=.67)
+    parser.add_argument('--imagenet', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
@@ -111,6 +139,7 @@ def main():
     args.save = args.save or 'work/densenet.base'
 
     cifar10 = args.cifar == 10
+    use_imagenet = args.imagenet
 
     torch.manual_seed(args.seed)
     if args.cuda:
@@ -120,11 +149,17 @@ def main():
         shutil.rmtree(args.save)
     os.makedirs(args.save, exist_ok=True)
 
-    net = densenet.DenseNet(
-        growthRate=12, depth=100, reduction=0.5,
-        bottleneck=True, nClasses=(10 if cifar10 else 100),
-        n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
-    )
+    if use_imagenet:
+        net = DenseNetVision(
+            growth_rate=32, block_config=[6, 12, 24, 16],
+            num_classes=1000, num_init_features=64,
+            n_binary_class=args.binClasses, binary_only=args.binWeight == 1.)
+    else:
+        net = densenet.DenseNet(
+            growthRate=12, depth=100, reduction=0.5,
+            bottleneck=True, nClasses=(10 if cifar10 else 100),
+            n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
+        )
 
     print('  + Number of params: {}'.format(
         sum([p.data.nelement() for p in net.parameters()])))
@@ -139,25 +174,41 @@ def main():
     elif args.opt == 'rmsprop':
         optimizer = optim.RMSprop(net.parameters(), weight_decay=1e-4)
 
-    if cifar10:
-        normMean = [0.53129727, 0.52593911, 0.52069134]
-        normStd = [0.28938246, 0.28505746, 0.27971658]
+    if use_imagenet:
+        trainTransform = transforms.Compose([
+            transforms.RandomSizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
+        ])
+
+        testTransform = transforms.Compose([
+            transforms.RandomSizedCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
+        ])
     else:
-        normMean =  [0.5423671, 0.53410053, 0.52827841]
-        normStd = [0.30129549, 0.29579896, 0.29065931]
+        if cifar10:
+            normMean = [0.53129727, 0.52593911, 0.52069134]
+            normStd = [0.28938246, 0.28505746, 0.27971658]
+        else:
+            normMean =  [0.5423671, 0.53410053, 0.52827841]
+            normStd = [0.30129549, 0.29579896, 0.29065931]
 
-    normTransform = transforms.Normalize(normMean, normStd)
+        normTransform = transforms.Normalize(normMean, normStd)
 
-    trainTransform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        normTransform
-    ])
-    testTransform = transforms.Compose([
-        transforms.ToTensor(),
-        normTransform
-    ])
+        trainTransform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normTransform
+        ])
+        testTransform = transforms.Compose([
+            transforms.ToTensor(),
+            normTransform
+        ])
 
     print(net)
     if args.trans:
@@ -174,28 +225,34 @@ def main():
                 blocks[-1] = (block, i + 1)
                 run_transfer_dset_b(args, blocks, *res)
         else:
-            run_transfer_dset_b(args, [1, 2, 3], *res)
+            run_transfer_dset_b(args, 'all', *res)
     else:
         run(args, optimizer, net, trainTransform, testTransform)
 
 
 def run(args, optimizer, net, trainTransform, testTransform):
-
-    cifar10 = args.cifar == 10
-    download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
-
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-    cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
 
-    train_set = cifar_cls(
-        root=data_root, train=True, download=download, transform=trainTransform)
+    if args.imagenet:
+        train_set = ImageFolderSubset(
+            included_classes=imagenet100, root=os.path.join(data_root, 'train'),
+            transform=trainTransform)
+        test_set = ImageFolderSubset(
+            included_classes=imagenet100, root=os.path.join(data_root, 'val'),
+            transform=testTransform)
+    else:
+        cifar10 = args.cifar == 10
+        download = not args.dataRoot
+        cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
+        train_set = cifar_cls(
+            root=data_root, train=True, download=download, transform=trainTransform)
+        test_set = cifar_cls(
+            root=data_root, train=False,
+            download=download, transform=testTransform)
+
     trainLoader = DataLoader(
         train_set, batch_size=args.batchSz, shuffle=True, **kwargs)
-
-    test_set = cifar_cls(
-        root=data_root, train=False,
-        download=download, transform=testTransform)
     testLoader = DataLoader(
         test_set, batch_size=args.batchSz, shuffle=False, **kwargs)
 
@@ -223,7 +280,7 @@ def run(args, optimizer, net, trainTransform, testTransform):
 
 def run_transfer(args, optimizer, net, trainTransform, testTransform):
     cifar10 = args.cifar == 10
-    N = args.cifar
+    N = args.cifar if not args.imagenet else 100
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
@@ -234,25 +291,39 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             with open(args.classes, 'r') as fh:
                 classes = list(map(int, fh.read().split(',')))
         else:
-            classes = list(range(N))
+            classes = list(imagenet100) if args.imagenet else list(range(N))
             shuffle(classes)
             with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
                 fh.write(','.join(map(str, classes)))
         set1, set2 = classes[:args.transSplit], classes[args.transSplit:]
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-    cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
 
-    train_set = cifar_cls(
-        root=data_root, train=True, download=download, transform=trainTransform)
-    train1 = SplitCifarDataSet(train_set, set1)
-    train2 = SplitCifarDataSet(train_set, set2)
+    if args.imagenet:
+        train1 = ImageFolderSubset(
+            included_classes=set1, root=os.path.join(data_root, 'train'),
+            transform=trainTransform)
+        test1 = ImageFolderSubset(
+            included_classes=set1, root=os.path.join(data_root, 'val'),
+            transform=testTransform)
+        train2 = ImageFolderSubset(
+            included_classes=set2, root=os.path.join(data_root, 'train'),
+            transform=trainTransform)
+        test2 = ImageFolderSubset(
+            included_classes=set2, root=os.path.join(data_root, 'val'),
+            transform=testTransform)
+    else:
+        cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
+        train_set = cifar_cls(
+            root=data_root, train=True, download=download, transform=trainTransform)
+        train1 = SplitCifarDataSet(train_set, set1)
+        train2 = SplitCifarDataSet(train_set, set2)
 
-    test_set = cifar_cls(
-        root=data_root, train=False,
-        download=download, transform=testTransform)
-    test1 = SplitCifarDataSet(test_set, set1)
-    test2 = SplitCifarDataSet(test_set, set2)
+        test_set = cifar_cls(
+            root=data_root, train=False,
+            download=download, transform=testTransform)
+        test1 = SplitCifarDataSet(test_set, set1)
+        test2 = SplitCifarDataSet(test_set, set2)
 
     trainLoader = DataLoader(
         train1, batch_size=args.batchSz, shuffle=True, **kwargs)
@@ -294,24 +365,33 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
 
     return train2, test2, fname
 
-
 def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     print('Start transfer training with ft={}'.format(ft_blocks))
     cifar10 = args.cifar == 10
 
-    net = densenet.DenseNet(
-        growthRate=12, depth=100, reduction=0.5,
-        bottleneck=True, nClasses=(10 if cifar10 else 100),
-        n_binary_class=args.binClasses, binary_only=False
-    )
+    if args.imagenet:
+        net = DenseNetVision(
+            growth_rate=32, block_config=[6, 12, 24, 16],
+            num_classes=1000, num_init_features=64,
+            n_binary_class=args.binClasses, binary_only=args.binWeight == 1.)
+    else:
+        net = densenet.DenseNet(
+            growthRate=12, depth=100, reduction=0.5,
+            bottleneck=True, nClasses=(10 if cifar10 else 100),
+            n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
+        )
     if args.cuda:
         net = net.cuda()
 
     state = net.state_dict()
     state.update(torch.load(filename))
     net.load_state_dict(state)
-    net.reset_layers(ft_blocks)
-    ft_params, reset_params = net.split_transfer_params(ft_blocks)
+    if ft_blocks == 'all':
+        net.reset_final_layer()
+        ft_params, reset_params = net.split_final_params()
+    else:
+        net.reset_layers(ft_blocks)
+        ft_params, reset_params = net.split_transfer_params(ft_blocks)
 
     if ft_blocks:
         param_vals = [
@@ -325,12 +405,15 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
         opt_func = adjust_opt_transfer_baseline
         epochs = 275
 
-    items = []
-    for block in ft_blocks:
-        if isinstance(block, tuple):
-            block = '{}={}'.format(*block)
-        items.append(block)
-    experiment = ','.join(map(str, items))
+    if ft_blocks != 'all':
+        items = []
+        for block in ft_blocks:
+            if isinstance(block, tuple):
+                block = '{}={}'.format(*block)
+            items.append(block)
+        experiment = ','.join(map(str, items))
+    else:
+        experiment = ft_blocks
 
     optimizer = optim.SGD(param_vals, lr=1e-1, momentum=0.9, weight_decay=1e-4)
 
