@@ -3,11 +3,14 @@
 import argparse
 from PIL import Image
 import torch
+import copy
 import numpy as np
 import random
 import time
 from random import shuffle
+from collections import defaultdict
 import os
+from functools import partial
 
 import torch.nn as nn
 import torch.optim as optim
@@ -30,7 +33,6 @@ import shutil
 
 import densenet
 from attic.label_cifar import unnatural_labels, natural_labels
-from densenet_efficient import DenseNetEfficient
 import make_graph
 
 imagenet100 = {
@@ -126,6 +128,7 @@ def main():
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
+    parser.add_argument('--maml', action='store_true')
     parser.add_argument('--save')
     parser.add_argument('--preTrainedModel')
     parser.add_argument('--seed', type=int, default=1)
@@ -345,9 +348,10 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
         best_error = 100
         # best_state = net.state_dict()
         ts0 = time.perf_counter()
+        train_fn = train_maml if args.maml else train
         for epoch in range(1, 175 + 1):
             adjust_opt(args.opt, optimizer, epoch)
-            train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels)
+            train_fn(args, epoch, net, trainLoader, optimizer, trainF, bin_labels)
             err = test(args, epoch, net, testLoader, optimizer, testF, bin_labels)
 
             if err < best_error:
@@ -480,7 +484,7 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
 
         optimizer.zero_grad()
         output = net(data)
-        if args.binClasses and not bin_labels:
+        if args.binClasses and not bin_labels:  # fine tuning model with bin
             output = output[0]
 
         if bin_labels:
@@ -526,6 +530,190 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
 
         trainF.write('{},{},{},{}\n'.format(partialEpoch, loss.data[0], err, fc_err))
         trainF.flush()
+
+
+def _replace_val(newval, grad):
+    return newval
+
+
+def train_maml(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
+    net.train()
+    nProcessed = 0
+    nTrain = len(trainLoader.dataset)
+    ts0 = time.perf_counter()
+
+    bin_weight = args.binWeight * 1 / len(bin_labels) if bin_labels else 0
+    fc_weight = 1. - args.binWeight
+    binary_only = args.binWeight == 1
+
+    lrs = [param_group['lr'] for param_group in optimizer.param_groups]
+    bin_data_iters = [(iter(trainLoader), iter(trainLoader)) for _ in bin_labels]
+    fc_iter1, fc_iter2 = iter(trainLoader), iter(trainLoader)
+
+    dummy_data, dummy_target = next(iter(trainLoader))
+    target_cls = dummy_target.__class__
+    # dummy_labels = target_cls([0, ] * len(dummy_target))
+    # if args.cuda:
+    #     dummy_target_var = Variable(dummy_labels.cuda())
+    #     dummy_data_var = Variable(dummy_data.cuda())
+    # else:
+    #     dummy_target_var = Variable(dummy_labels)
+    #     dummy_data_var = Variable(dummy_data)
+
+    batch_idx = 0
+    done = False
+    while not done:
+        ts0_batch = time.perf_counter()
+        task_grads = []
+        optimizer.zero_grad()
+        original_state = copy.deepcopy(net.state_dict())
+        errors = []
+
+        for classifier, unit_labels, (iter1, iter2) in zip(net.binary_layers, bin_labels, bin_data_iters):
+            try:
+                data, target = next(iter1)
+            except StopIteration:
+                done = True
+                break
+
+            labels = [1 if label in unit_labels else 0 for label in target]
+            labels = target_cls(labels)
+            if args.cuda:
+                data, labels = data.cuda(), labels.cuda()
+            data, labels = Variable(data), Variable(labels)
+
+            optim_state = copy.deepcopy(optimizer.state_dict())
+
+            optimizer.zero_grad()
+            output = F.log_softmax(classifier(net(data, skip_classifier=True)))
+            loss = F.nll_loss(output, labels)
+            loss.backward()
+            optimizer.step()
+
+            data, target = next(iter2)
+            labels = [1 if label in unit_labels else 0 for label in target]
+            labels = target_cls(labels)
+            if args.cuda:
+                data, labels = data.cuda(), labels.cuda()
+            data, labels = Variable(data), Variable(labels)
+
+            optimizer.zero_grad()
+            output = F.log_softmax(classifier(net(data, skip_classifier=True)))
+            loss = F.nll_loss(output, labels) * bin_weight
+
+            pred = output.data.max(1)[1]  # get the index of the max log-probability
+            incorrect = pred.ne(labels.data).cpu().sum()
+            errors.append(incorrect / len(data) * 100 * bin_weight)
+
+            loss.backward()
+            task_grads.append([copy.deepcopy(param.grad) for param in net.parameters()])
+
+            net.load_state_dict(original_state)
+            optimizer.load_state_dict(optim_state)
+            # XXX: https://discuss.pytorch.org/t/saving-and-loading-sgd-optimizer/2536
+            optimizer.state = defaultdict(dict, optimizer.state)
+
+        if done:
+            break
+
+        fc_err = 0
+        if not binary_only:
+            optim_state = copy.deepcopy(optimizer.state_dict())
+
+            try:
+                data, target = next(fc_iter1)
+            except StopIteration:
+                break
+
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            data, target = Variable(data), Variable(target)
+
+            optimizer.zero_grad()
+            output = F.log_softmax(net.fc(net(data, skip_classifier=True)))
+            loss = F.nll_loss(output, target)
+            loss.backward()
+            optimizer.step()
+
+            data, target = next(fc_iter2)
+            if args.cuda:
+                data, target = data.cuda(), target.cuda()
+            data, target = Variable(data), Variable(target)
+
+            optimizer.zero_grad()
+            output = F.log_softmax(net.fc(net(data, skip_classifier=True)))
+            loss = F.nll_loss(output, target) * fc_weight
+
+            pred = output.data.max(1)[1]  # get the index of the max log-probability
+            incorrect = pred.ne(target.data).cpu().sum()
+            errors.append(incorrect / len(data) * 100 * fc_weight)
+            fc_err = incorrect / len(data) * 100
+
+            loss.backward()
+            task_grads.append([copy.deepcopy(param.grad) for param in net.parameters()])
+
+            net.load_state_dict(original_state)
+            optimizer.load_state_dict(optim_state)
+            # XXX: https://discuss.pytorch.org/t/saving-and-loading-sgd-optimizer/2536
+            optimizer.state = defaultdict(dict, optimizer.state)
+
+        # dummy step to fill in buffers so grads will be replaced
+        dummy_labels = target_cls([0, ] * len(dummy_target))
+        if args.cuda:
+            dummy_target_var = Variable(dummy_labels.cuda())
+            dummy_data_var = Variable(dummy_data.cuda())
+        else:
+            dummy_target_var = Variable(dummy_labels)
+            dummy_data_var = Variable(dummy_data)
+
+        # labels = [1 if label in unit_labels else 0 for label in target]
+        # labels = target_cls(labels)
+        # if args.cuda:
+        #     labels = labels.cuda()
+        # labels = Variable(labels)
+        # dummy_data_var = data
+        # dummy_target_var = labels
+
+        hooks = []
+        optimizer.zero_grad()
+        for param, values in zip(net.parameters(), zip(*task_grads)):
+            hooks.append(param.register_hook(partial(_replace_val, sum((v for v in values if v is not None)))))
+
+        if bin_labels:
+            output = F.log_softmax(net.binary_layers[0](net(dummy_data_var, skip_classifier=True)))
+            loss = F.nll_loss(output, dummy_target_var)
+            for layer, unit_labels in zip(net.binary_layers[1:], bin_labels[1:]):
+                output = F.log_softmax(layer(net(dummy_data_var, skip_classifier=True)))
+                loss += F.nll_loss(output, dummy_target_var)
+
+            if not binary_only:
+                output = F.log_softmax(net.fc(net(dummy_data_var, skip_classifier=True)))
+                loss += F.nll_loss(output, dummy_target_var)
+        else:
+            output = F.log_softmax(net.fc(net(dummy_data_var, skip_classifier=True)))
+            loss = F.nll_loss(output, dummy_target_var)
+        loss.backward()
+
+        # for param_group in optimizer.param_groups:
+        #     param_group['lr'] = .001
+        optimizer.step()
+        for h in hooks:
+            h.remove()
+        # for param_group, lr in zip(optimizer.param_groups, lrs):
+        #     param_group['lr'] = lr
+
+        err = sum(errors)
+        nProcessed += len(data)
+        partialEpoch = epoch + batch_idx / len(trainLoader) - 1
+        te = time.perf_counter()
+        print('Train Epoch: {:.2f} [{}/{} ({:.0f}%)]\tTime: [{:.2f}s/{:.2f}s]\tLoss: {:.6f}\tError: {:.6f}'.format(
+            partialEpoch, nProcessed, nTrain, 100. * batch_idx / len(trainLoader),
+            te - ts0_batch, te - ts0, loss.data[0], err))
+
+        trainF.write('{},{},{},{}\n'.format(partialEpoch, loss.data[0], err, fc_err))
+        trainF.flush()
+
+        batch_idx += 1
 
 
 def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
