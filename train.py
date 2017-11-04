@@ -499,15 +499,7 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
                 loss = F.nll_loss(output[0], targets[0]) * fc_weight
                 for bin_output, bin_target in zip(output[1:], targets[1:]):
                     loss = loss + F.nll_loss(bin_output, bin_target) * bin_weight
-        else:
-            loss = F.nll_loss(output, target)
 
-        del output
-        loss.backward()
-        optimizer.step()
-        nProcessed += len(data)
-
-        if bin_labels:
             errors = []
             s = 1 if binary_only else 0
             fc_err = 0
@@ -521,9 +513,16 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
                     errors.append(incorrect / len(data) * 100 * bin_weight)
             err = sum(errors)
         else:
+            loss = F.nll_loss(output, target)
+
             pred = output.data.max(1)[1] # get the index of the max log-probability
             incorrect = pred.ne(target.data).cpu().sum()
             fc_err = err = 100.*incorrect/len(data)
+
+        del output
+        loss.backward()
+        optimizer.step()
+        nProcessed += len(data)
 
         partialEpoch = epoch + batch_idx / len(trainLoader) - 1
         te = time.perf_counter()
