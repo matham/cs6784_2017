@@ -269,6 +269,9 @@ def run(args, optimizer, net, trainTransform, testTransform):
         train(args, epoch, net, trainLoader, optimizer, trainF, [])
         err = test(args, epoch, net, testLoader, optimizer, testF, [])
 
+        torch.save(optimizer.state_dict(), os.path.join(args.save, 'optimizer_epoch{}.t7'.format(epoch)))
+        torch.save(net.state_dict(), os.path.join(args.save, 'model_epoch{}.t7'.format(epoch)))
+
         if err < best_error:
             best_error = err
             print('New best error {}'.format(err))
@@ -353,6 +356,9 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             adjust_opt(args.opt, optimizer, epoch)
             train_fn(args, epoch, net, trainLoader, optimizer, trainF, bin_labels)
             err = test(args, epoch, net, testLoader, optimizer, testF, bin_labels)
+
+            torch.save(optimizer.state_dict(), os.path.join(args.save, 'optimizer_epoch{}.t7'.format(epoch)))
+            torch.save(net.state_dict(), os.path.join(args.save, 'model_epoch{}.t7'.format(epoch)))
 
             if err < best_error:
                 best_error = err
@@ -461,9 +467,6 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
     bin_weight = args.binWeight * 1 / len(bin_labels) if bin_labels else 0
     fc_weight = 1. - args.binWeight
     binary_only = args.binWeight == 1
-    # if bin_labels:
-    #     n = 2 * len(bin_labels[0])
-    #     bin_weight *= 2 * (n - 1) / n
 
     for batch_idx, (data, target) in enumerate(trainLoader):
         ts0_batch = time.perf_counter()
@@ -499,7 +502,7 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
         else:
             loss = F.nll_loss(output, target)
 
-        # make_graph.save('/tmp/t.dot', loss.creator); assert(False)
+        del output
         loss.backward()
         optimizer.step()
         nProcessed += len(data)
@@ -666,32 +669,27 @@ def train_maml(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
             dummy_target_var = Variable(dummy_labels)
             dummy_data_var = Variable(dummy_data)
 
-        # labels = [1 if label in unit_labels else 0 for label in target]
-        # labels = target_cls(labels)
-        # if args.cuda:
-        #     labels = labels.cuda()
-        # labels = Variable(labels)
-        # dummy_data_var = data
-        # dummy_target_var = labels
-
         hooks = []
         optimizer.zero_grad()
         for param, values in zip(net.parameters(), zip(*task_grads)):
             hooks.append(param.register_hook(partial(_replace_val, sum((v for v in values if v is not None)))))
 
         if bin_labels:
-            output = F.log_softmax(net.binary_layers[0](net(dummy_data_var, skip_classifier=True)))
+            base_out = net(dummy_data_var, skip_classifier=True)
+            output = F.log_softmax(net.binary_layers[0](base_out))
             loss = F.nll_loss(output, dummy_target_var)
             for layer, unit_labels in zip(net.binary_layers[1:], bin_labels[1:]):
-                output = F.log_softmax(layer(net(dummy_data_var, skip_classifier=True)))
+                output = F.log_softmax(layer(base_out))
                 loss += F.nll_loss(output, dummy_target_var)
 
             if not binary_only:
-                output = F.log_softmax(net.fc(net(dummy_data_var, skip_classifier=True)))
+                output = F.log_softmax(net.fc(base_out))
                 loss += F.nll_loss(output, dummy_target_var)
+            del base_out
         else:
             output = F.log_softmax(net.fc(net(dummy_data_var, skip_classifier=True)))
             loss = F.nll_loss(output, dummy_target_var)
+        del output
         loss.backward()
 
         # for param_group in optimizer.param_groups:
