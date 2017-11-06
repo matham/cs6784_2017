@@ -271,8 +271,8 @@ def run(args, optimizer, net, trainTransform, testTransform):
         train(args, epoch, net, trainLoader, optimizer, trainF, [])
         err = test(args, epoch, net, testLoader, optimizer, testF, [])
 
-        torch.save(optimizer.state_dict(), os.path.join(args.save, 'optimizer_epoch{}.t7'.format(epoch)))
-        torch.save(net.state_dict(), os.path.join(args.save, 'model_epoch{}.t7'.format(epoch)))
+        torch.save(optimizer.state_dict(), os.path.join(args.save, 'optimizer_last_epoch.t7'))
+        torch.save(net.state_dict(), os.path.join(args.save, 'model_last_epoch.t7'))
 
         if err < best_error:
             best_error = err
@@ -359,8 +359,8 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             train_fn(args, epoch, net, trainLoader, optimizer, trainF, bin_labels)
             err = test(args, epoch, net, testLoader, optimizer, testF, bin_labels)
 
-            torch.save(optimizer.state_dict(), os.path.join(args.save, 'optimizer_epoch{}.t7'.format(epoch)))
-            torch.save(net.state_dict(), os.path.join(args.save, 'model_epoch{}.t7'.format(epoch)))
+            torch.save(optimizer.state_dict(), os.path.join(args.save, 'optimizer_last_epoch.t7'))
+            torch.save(net.state_dict(), os.path.join(args.save, 'model_last_epoch.t7'))
 
             if err < best_error:
                 best_error = err
