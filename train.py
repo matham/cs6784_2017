@@ -338,7 +338,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
                 cls_limit[cls] = args.limitTransClsSize
 
         train1 = SplitCifarDataSet(train_set, set1)
-        train2 = SplitCifarDataSet(train_set, set2, limitTransClsSize=cls_limit)
+        train2 = SplitCifarDataSet(train_set, set2, train_classes_size=cls_limit)
 
         test_set = cifar_cls(
             root=data_root, train=False,
