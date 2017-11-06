@@ -68,7 +68,7 @@ class SplitCifarDataSet(Dataset):
 
     labels = None
 
-    def __init__(self, dataset, classes):
+    def __init__(self, dataset, classes, train_classes_size={}):
         self.dataset = dataset
 
         if dataset.train:
@@ -77,12 +77,18 @@ class SplitCifarDataSet(Dataset):
         else:
             orig_data = dataset.test_data
             orig_labels = dataset.test_labels
+            train_classes_size = {}
         orig_labels = np.array(orig_labels, dtype=np.int32)
 
         classes = set(classes)
         select = np.zeros((len(orig_labels), ), dtype=bool)
         for i, label in enumerate(orig_labels):
             select[i] = label in classes
+
+        for cls, size in train_classes_size.items():
+            indices,  = np.nonzero(orig_labels == cls)
+            np.random.shuffle(indices)
+            select[indices[size:]] = False
 
         self.data = orig_data[select, :, :, :]
         self.labels = orig_labels[select]
@@ -127,6 +133,7 @@ def main():
     parser.add_argument('--imagenet', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--noRetrainAll', action='store_true')
+    parser.add_argument('--limitTransClsSize', type=int, default=0)
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
     parser.add_argument('--maml', action='store_true')
@@ -324,8 +331,14 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
         cifar_cls = dset.CIFAR10 if cifar10 else dset.CIFAR100
         train_set = cifar_cls(
             root=data_root, train=True, download=download, transform=trainTransform)
+
+        cls_limit = {}
+        if args.limitTransClsSize:
+            for cls in set2:
+                cls_limit[cls] = args.limitTransClsSize
+
         train1 = SplitCifarDataSet(train_set, set1)
-        train2 = SplitCifarDataSet(train_set, set2)
+        train2 = SplitCifarDataSet(train_set, set2, limitTransClsSize=cls_limit)
 
         test_set = cifar_cls(
             root=data_root, train=False,
