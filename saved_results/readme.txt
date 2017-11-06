@@ -214,3 +214,12 @@ cifar100-transfer-finetune-blocks2
 
 Fine tune on B by resetting only the last layer and reducing the training set size to 60 images per class. The baseline model came from cifar100-transfer-binary-classifier6.
 
+-------------------------------
+11/5
+Ayons PC
+709338192300767a42e88284abcf1f5168ef6e8d
+cifar100-transfer-reduced-examples
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes /root/Desktop/shared_docker/cs6784_2017/class_shuffled --preTrainedModel /root/Desktop/shared_docker/cs6784_2017/model_cifar100_base.t7  --limitTransClsSize 60 | tee log
+
+Fine tune on B by resetting only the last layer and reducing the training set size to 60 images per class. The baseline model came from cifar100-transfer-finetune-blocks2.
+
