@@ -126,6 +126,7 @@ def main():
     parser.add_argument('--binWeight', type=float, default=.67)
     parser.add_argument('--imagenet', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
+    parser.add_argument('--noRetrainAll', action='store_true')
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
     parser.add_argument('--maml', action='store_true')
@@ -217,7 +218,8 @@ def main():
     if args.trans:
         res = run_transfer(args, optimizer, net, trainTransform, testTransform)
         if args.transBlocks:
-            run_transfer_dset_b(args, [], *res)
+            if not args.noRetrainAll:
+                run_transfer_dset_b(args, [], *res)
             run_transfer_dset_b(args, [1], *res)
             run_transfer_dset_b(args, [1, 2], *res)
 
@@ -741,7 +743,7 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
             bin_targets.append(Variable(labels))
 
         output = net(data)
-        if args.binClasses and not bin_labels:
+        if args.binClasses and not bin_labels:  # fine tuning
             output = output[0]
 
         if bin_labels:
