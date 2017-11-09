@@ -241,3 +241,21 @@ imagenet100-transfer-binary2
 
 imagenet 100 classes, 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer and fine tune on B.
 
+-------------------------------
+11/9
+Ayons PC
+de45929d2ab71885ecb80e384a9802da7ebc2912
+svhn-transfer-binary
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes /root/Desktop/shared_docker/cs6784_2017/class_shuffled --preTrainedModel /root/Desktop/shared_docker/cs6784_2017/model_cifar100_base.t7 --binClasses 1 --binWeight .4 --ftSVHN /root/Desktop/data/svhn | tee log
+
+Fine tune on SVHN by resetting only the last layer and training/testing on svhn. The baseline model came from cifar100-transfer-binary-classifier6.
+
+-------------------------------
+11/9
+Prajna
+de45929d2ab71885ecb80e384a9802da7ebc2912
+svhn-transfer
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/ --save results --cifar 100  --trans --classes class_shuffled --preTrainedModel model_cifar100_base.t7 --ftSVHN /root/Desktop/data/svhn | tee log
+
+Fine tune on SVHN by resetting only the last layer and training/testing on svhn. The baseline model came from cifar100-transfer-finetune-blocks2.
+
