@@ -223,3 +223,21 @@ cifar100-transfer-reduced-examples
 
 Fine tune on B by resetting only the last layer and reducing the training set size to 60 images per class. The baseline model came from cifar100-transfer-finetune-blocks2.
 
+----------------------------------
+11/3
+EC2
+709338192300767a42e88284abcf1f5168ef6e8d
+cifar100-transfer-binary-classifier-maml2
+python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 4 --binWeight .4 --maml --batchSz 50 | tee log
+
+50/50 random split. Train on A by adding 4 binary classifiers with loss weight .4 and a FC layer using maml then fine tune on B.
+
+----------------------------------
+11/3
+Prajna
+709338192300767a42e88284abcf1f5168ef6e8d
+imagenet100-transfer-binary2
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/imagenet --save results --imagenet --trans --batchSz 45 --binWeight .4 --binClasses 1 | tee log
+
+imagenet 100 classes, 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer and fine tune on B.
+
