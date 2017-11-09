@@ -43,6 +43,35 @@ imagenet100 = {
     858, 867, 875, 877, 881, 882, 919, 934, 938, 941, 955, 961, 971, 976, 986, 987, 996}
 
 
+class ReducedDataSet(Dataset):
+
+    dataset = None
+
+    dataset_indices = []
+
+    def __init__(self, dataset, cls_size=None):
+        self.dataset = dataset
+        if cls_size is None:
+            return
+
+        classes = defaultdict(list)
+        for i, (_, cls) in enumerate(dataset):
+            classes[cls].append(i)
+
+        dataset_indices = self.dataset_indices = []
+        for indices in classes.values():
+            shuffle(indices)
+            dataset_indices.extend(indices[:cls_size])
+
+    def __getitem__(self, index):
+        if not self.dataset_indices:
+            return self.dataset[index]
+        return self.dataset[self.dataset_indices[index]]
+
+    def __len__(self):
+        return len(self.dataset_indices)
+
+
 class ImageFolderSubset(dset.folder.ImageFolder):
 
     original_idx = []
@@ -133,6 +162,8 @@ def main():
     parser.add_argument('--imagenet', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--noRetrainAll', action='store_true')
+    parser.add_argument('--ftSVHN', type=str, default='')
+    parser.add_argument('--ftCIFAR10', action='store_true')
     parser.add_argument('--limitTransClsSize', type=int, default=0)
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
@@ -345,6 +376,47 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             download=download, transform=testTransform)
         test1 = SplitCifarDataSet(test_set, set1)
         test2 = SplitCifarDataSet(test_set, set2)
+
+        if args.ftSVHN:
+            train2 = dset.svhn.SVHN(
+                root=args.ftSVHN, split='train', download=False,
+                transform=transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            )
+            test2 = dset.svhn.SVHN(
+                root=args.ftSVHN, split='test', download=False,
+                transform=transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            )
+            if args.limitTransClsSize:
+                train2 = ReducedDataSet(train2, cls_size=args.limitTransClsSize)
+                test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
+        elif args.ftCIFAR10:
+
+            normMean = [0.5423671, 0.53410053, 0.52827841]
+            normStd = [0.30129549, 0.29579896, 0.29065931]
+
+            normTransform = transforms.Normalize(normMean, normStd)
+            trainTransform = transforms.Compose([
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normTransform
+            ])
+            testTransform = transforms.Compose([
+                transforms.ToTensor(),
+                normTransform
+            ])
+            train2 = dset.CIFAR10(
+                root=data_root, train=True, download=download, transform=trainTransform)
+            test2 = dset.CIFAR10(
+                root=data_root, train=False,
+                download=download, transform=testTransform)
+            if args.limitTransClsSize:
+                train2 = ReducedDataSet(train2, cls_size=args.limitTransClsSize)
+                test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
 
     trainLoader = DataLoader(
         train1, batch_size=args.batchSz, shuffle=True, **kwargs)
