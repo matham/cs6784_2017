@@ -259,3 +259,21 @@ svhn-transfer
 
 Fine tune on SVHN by resetting only the last layer and training/testing on svhn. The baseline model came from cifar100-transfer-finetune-blocks2.
 
+-------------------------------
+11/9
+Ayons PC
+b5d64f95c2fcbfc3ebad54e85a9f2255ca4659ce
+cifar10-transfer-binary
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data/ --save results --cifar 100  --trans --binWeight .4 --binClasses 1 --classes class_shuffled --preTrainedModel model_cifar100_base.t7 --ftCIFAR10 | tee log
+
+Fine tune on cifar10 by resetting only the last layer and training/testing on cifar10. The baseline model came from cifar100-transfer-binary-classifier6.
+
+-------------------------------
+11/9
+Prajna
+b5d64f95c2fcbfc3ebad54e85a9f2255ca4659ce
+cifar10-transfer
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/ --save results --cifar 100  --trans --classes class_shuffled --preTrainedModel model_cifar100_base.t7 --ftCIFAR10 | tee log
+
+Fine tune on cifar10 by resetting only the last layer and training/testing on cifar10. The baseline model came from cifar100-transfer-finetune-blocks2.
+
