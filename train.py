@@ -243,6 +243,7 @@ def main():
     parser.add_argument('--transSplit', type=int, default=50)
     parser.add_argument('--binClasses', type=int, default=0)
     parser.add_argument('--binWeight', type=float, default=.67)
+    parser.add_argument('--binWeightDecay', action='store_true')
     parser.add_argument('--imagenet', action='store_true')
     parser.add_argument('--inat', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
@@ -711,9 +712,16 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
     nProcessed = 0
     nTrain = len(trainLoader.dataset)
     ts0 = time.perf_counter()
-    bin_weight = args.binWeight * 1 / len(bin_labels) if bin_labels else 0
+    bin_decay = args.binWeightDecay
+    bin_weight = args.binWeight * (1 if bin_decay else 1 / len(bin_labels)) if bin_labels else 0
     fc_weight = 1. - args.binWeight
     binary_only = args.binWeight == 1
+    if bin_decay and len(bin_labels) > 1:
+        bin_weights = list(reversed(list(range(1, len(bin_labels) + 1))))
+        weight_sum = sum(bin_weights)
+        bin_weights = [w / weight_sum for w in bin_weights]
+    else:
+        bin_weights = [1 for _ in bin_labels]
 
     for batch_idx, (data, target) in enumerate(trainLoader):
         ts0_batch = time.perf_counter()
@@ -739,17 +747,18 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
 
         if bin_labels:
             if binary_only:
-                loss = F.nll_loss(output[0], targets[1]) * bin_weight
-                for bin_output, bin_target in zip(output[1:], targets[2:]):
-                    loss = loss + F.nll_loss(bin_output, bin_target) * bin_weight
+                loss = F.nll_loss(output[0], targets[1]) * bin_weight * bin_weights[0]
+                for bin_output, bin_target, w in zip(output[1:], targets[2:], bin_weights[1:]):
+                    loss = loss + F.nll_loss(bin_output, bin_target) * bin_weight * w
             else:
                 loss = F.nll_loss(output[0], targets[0]) * fc_weight
-                for bin_output, bin_target in zip(output[1:], targets[1:]):
-                    loss = loss + F.nll_loss(bin_output, bin_target) * bin_weight
+                for bin_output, bin_target, w in zip(output[1:], targets[1:], bin_weights):
+                    loss = loss + F.nll_loss(bin_output, bin_target) * bin_weight * w
 
             errors = []
             s = 1 if binary_only else 0
             fc_err = 0
+            w_iter = iter(bin_weights)
             for i, (bin_output, bin_target) in enumerate(zip(output, targets[s:])):
                 pred = bin_output.data.max(1)[1]  # get the index of the max log-probability
                 incorrect = pred.ne(bin_target.data).cpu().sum()
@@ -757,7 +766,7 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
                     errors.append(incorrect / len(data) * 100 * fc_weight)
                     fc_err = incorrect / len(data) * 100
                 else:
-                    errors.append(incorrect / len(data) * 100 * bin_weight)
+                    errors.append(incorrect / len(data) * 100 * bin_weight * next(w_iter))
             err = sum(errors)
         else:
             loss = F.nll_loss(output, target)
@@ -966,9 +975,16 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
     incorrect = 0
     fc_incorrect = 0
 
-    bin_weight = args.binWeight * 1 / len(bin_labels) if bin_labels else 0
+    bin_decay = args.binWeightDecay
+    bin_weight = args.binWeight * (1 if bin_decay else 1 / len(bin_labels)) if bin_labels else 0
     fc_weight = 1. - args.binWeight
     binary_only = args.binWeight == 1.
+    if bin_decay and len(bin_labels) > 1:
+        bin_weights = list(reversed(list(range(1, len(bin_labels) + 1))))
+        weight_sum = sum(bin_weights)
+        bin_weights = [w / weight_sum for w in bin_weights]
+    else:
+        bin_weights = [1 for _ in bin_labels]
 
     ts0 = time.perf_counter()
     for data, target in testLoader:
@@ -992,21 +1008,22 @@ def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
             output = output[0]
 
         if bin_labels:
+            w_iter = iter(bin_weights)
             s = 1 if binary_only else 0
-            weight = fc_weight if not binary_only else bin_weight
+            weight = fc_weight if not binary_only else (bin_weight * next(w_iter))
             test_loss += F.nll_loss(output[0], bin_targets[s]).data[0] * weight
             for bin_output, bin_target in zip(output[1:], bin_targets[s + 1:]):
-                test_loss += F.nll_loss(bin_output, bin_target).data[0] * bin_weight
+                test_loss += F.nll_loss(bin_output, bin_target).data[0] * bin_weight * next(w_iter)
 
+            w_iter = iter(bin_weights)
             for i, (bin_output, bin_target) in enumerate(zip(output, bin_targets[s:])):
                 pred = bin_output.data.max(1)[1]  # get the index of the max log-probability
                 diff = pred.ne(bin_target.data).cpu().sum()
                 if not binary_only and not i:
                     incorrect += diff * fc_weight
                     fc_incorrect += diff
-
                 else:
-                    incorrect += diff * bin_weight
+                    incorrect += diff * bin_weight * next(w_iter)
         else:
             test_loss += F.nll_loss(output, target).data[0]
             pred = output.data.max(1)[1] # get the index of the max log-probability
