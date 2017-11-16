@@ -277,3 +277,30 @@ cifar10-transfer
 
 Fine tune on cifar10 by resetting only the last layer and training/testing on cifar10. The baseline model came from cifar100-transfer-finetune-blocks2.
 
+----------------------------------
+11/14
+Ayons PC
+fbf58e60ef9da912113c069c5d496d1bda85e1f1
+cifar100-transfer-binary-classifier11-lin
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 4 --binWeight .4 --binWeightDecay | tee log
+
+50/50 random split. Train on A by adding 4 binary classifiers with loss weight .4 and a FC layer then fine tune on B. The 4 units were linearly scaled.
+
+----------------------------------
+11/15
+Ayons PC
+fbf58e60ef9da912113c069c5d496d1bda85e1f1
+cifar100-transfer-binary-classifier12-lin
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 2 --binWeight .4 --binWeightDecay | tee log
+
+50/50 random split. Train on A by adding 2 binary classifiers with loss weight .4 and a FC layer then fine tune on B. The 4 units were linearly scaled.
+
+-------------------------------
+11/14
+Prajna
+fbf58e60ef9da912113c069c5d496d1bda85e1f1
+inat-rand-transfer
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/imagenet --save results --imagenet --trans --batchSz 45 --classes class_shuffled --preTrainedModel model_cifar10_base.t7 --ftINat /root/Desktop/data/inat --limitTransClsSize 600| tee log
+
+Fine tune on inat by resetting only the last layer and training/testing on inat. The baseline model came from imagenet100-transfer. inat was randomly extracted to 50 classes, 600/class train and 50/class test.
+
