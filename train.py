@@ -8,6 +8,7 @@ import numpy as np
 import random
 import time
 from random import shuffle
+import shutil
 from collections import defaultdict
 import os
 from functools import partial
@@ -35,7 +36,7 @@ import densenet
 from attic.label_cifar import unnatural_labels, natural_labels
 import make_graph
 
-imagenet100 = {
+iNat = {
     5, 6, 7, 15, 27, 50, 55, 73, 76, 80, 96, 104, 105, 106, 107, 130, 135, 152, 179, 185, 188, 208, 248,
     252, 264, 278, 314, 317, 330, 338, 355, 360, 371, 389, 397, 402, 404, 409, 413, 416, 433, 434, 456,
     471, 478, 481, 490, 491, 519, 530, 534, 535, 546, 555, 558, 566, 579, 581, 600, 609, 628, 634, 652,
@@ -49,24 +50,49 @@ class ReducedDataSet(Dataset):
 
     dataset_indices = []
 
-    def __init__(self, dataset, cls_size=None):
+    target_map = {}
+
+    def __init__(self, dataset, cls_size=None, min_cls_size=None, min_classes=0, max_classes=0):
         self.dataset = dataset
-        if cls_size is None:
-            return
 
         classes = defaultdict(list)
-        for i, (_, cls) in enumerate(dataset):
-            classes[cls].append(i)
+        for i, (img, cls) in enumerate(dataset):
+            if img.size[0] > 224 and img.size[1] > 224:
+                classes[cls].append(i)
+
+        if min_cls_size:
+            small_classes = {}
+            for k, v in list(classes.items()):
+                if len(v) < min_cls_size:
+                    small_classes[k] = v
+                    del classes[k]
+
+            if min_classes and len(classes) < min_classes:
+                raise Exception('Only {} classes have {} examples'.format(len(classes), min_cls_size))
+                items = sorted(
+                    small_classes.items(), key=lambda x: len(x[1]), reverse=True)
+                for k, v in items[:min_classes - len(classes)]:
+                    classes[k] = v
 
         dataset_indices = self.dataset_indices = []
-        for indices in classes.values():
+        values = list(classes.items())
+        if max_classes:
+            shuffle(values)
+            values = values[:max_classes]
+            print('Keeping classes {}'.format([k[0] for k in values]))
+        for _, indices in values:
             shuffle(indices)
-            dataset_indices.extend(indices[:cls_size])
+            if cls_size is None:
+                dataset_indices.extend(indices)
+            else:
+                dataset_indices.extend(indices[:cls_size])
+        self.target_map = {item[0]: i for i, item in enumerate(values)}
 
     def __getitem__(self, index):
         if not self.dataset_indices:
             return self.dataset[index]
-        return self.dataset[self.dataset_indices[index]]
+        img, cls = self.dataset[self.dataset_indices[index]]
+        return img, self.target_map[cls]
 
     def __len__(self):
         return len(self.dataset_indices)
@@ -87,6 +113,64 @@ class ImageFolderSubset(dset.folder.ImageFolder):
     def __len__(self):
         return len(self.original_idx)
 
+
+class PartialDataset(Dataset):
+
+    dataset = None
+
+    indices = []
+
+    transform = None
+
+    def __init__(self, dataset, indices, transform=None):
+        self.dataset = dataset
+        self.indices = indices
+        self.transform = transform
+
+    def __getitem__(self, index):
+        img, target = self.dataset[self.indices[index]]
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, target
+
+    def __len__(self):
+        return len(self.indices)
+
+
+def split_train_val(dataset, val_size, train_transform=None, val_transform=None):
+    classes = defaultdict(list)
+    for i, (_, cls) in enumerate(dataset):
+        classes[cls].append(i)
+
+    train, val = [], []
+    for v in classes.values():
+        shuffle(v)
+        train.extend(v[:-val_size])
+        val.extend(v[-val_size:])
+
+    return PartialDataset(dataset, train,
+                          transform=train_transform), PartialDataset(dataset, val, transform=val_transform)
+
+
+def get_inat_dataset_stats(dataset):
+    # return [0.47960037, 0.49699566, 0.41930383], [0.23362727, 0.22826615, 0.2632432]
+    N = len(dataset)
+    print('Computing stats for {} examples'.format(N))
+    r, g, b = [], [], []
+    for i, (img, _) in enumerate(dataset):
+        r.append(np.asarray(img, dtype=np.uint8)[:, :, 0].ravel())
+        g.append(np.asarray(img, dtype=np.uint8)[:, :, 1].ravel())
+        b.append(np.asarray(img, dtype=np.uint8)[:, :, 2].ravel())
+
+    means = []
+    stdevs = []
+    for c in (r, g, b):
+        pixels = np.concatenate(c)
+        pixels = pixels.astype(dtype=np.float32) / 255
+        means.append(float(np.mean(pixels)))
+        stdevs.append(float(np.std(pixels)))
+    print('got {}, {}'.format(means, stdevs))
+    return means, stdevs
 
 
 class SplitCifarDataSet(Dataset):
@@ -160,9 +244,12 @@ def main():
     parser.add_argument('--binClasses', type=int, default=0)
     parser.add_argument('--binWeight', type=float, default=.67)
     parser.add_argument('--imagenet', action='store_true')
+    parser.add_argument('--inat', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--noRetrainAll', action='store_true')
     parser.add_argument('--ftSVHN', type=str, default='')
+    parser.add_argument('--ftINat', type=str, default='')
+    parser.add_argument('--ftCopySubset', type=str, default='')
     parser.add_argument('--ftCIFAR10', action='store_true')
     parser.add_argument('--limitTransClsSize', type=int, default=0)
     parser.add_argument('--dataRoot')
@@ -191,7 +278,7 @@ def main():
         shutil.rmtree(args.save)
     os.makedirs(args.save, exist_ok=True)
 
-    if use_imagenet:
+    if use_imagenet or args.inat:
         net = DenseNetVision(
             growth_rate=32, block_config=[6, 12, 24, 16],
             num_classes=1000, num_init_features=64,
@@ -217,6 +304,21 @@ def main():
         optimizer = optim.RMSprop(net.parameters(), weight_decay=1e-4)
 
     if use_imagenet:
+        trainTransform = transforms.Compose([
+            transforms.RandomSizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
+        ])
+
+        testTransform = transforms.Compose([
+            transforms.RandomSizedCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
+        ])
+    elif args.inat:
         trainTransform = transforms.Compose([
             transforms.RandomSizedCrop(224),
             transforms.RandomHorizontalFlip(),
@@ -278,12 +380,19 @@ def run(args, optimizer, net, trainTransform, testTransform):
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
     if args.imagenet:
+        classes = list(range(1000))
+        shuffle(classes)
         train_set = ImageFolderSubset(
-            included_classes=imagenet100, root=os.path.join(data_root, 'train'),
+            included_classes=classes[:100], root=os.path.join(data_root, 'train'),
             transform=trainTransform)
         test_set = ImageFolderSubset(
-            included_classes=imagenet100, root=os.path.join(data_root, 'val'),
+            included_classes=classes[:100], root=os.path.join(data_root, 'val'),
             transform=testTransform)
+    elif args.inat:
+        whole_set = dset.folder.ImageFolder(root=data_root)
+        whole_set = ReducedDataSet(dataset=whole_set, cls_size=650, min_cls_size=650, min_classes=100)
+        train_set, test_set = split_train_val(
+            whole_set, val_size=50, train_transform=trainTransform, val_transform=testTransform)
     else:
         cifar10 = args.cifar == 10
         download = not args.dataRoot
@@ -326,7 +435,7 @@ def run(args, optimizer, net, trainTransform, testTransform):
 
 def run_transfer(args, optimizer, net, trainTransform, testTransform):
     cifar10 = args.cifar == 10
-    N = args.cifar if not args.imagenet else 100
+    N = args.cifar if not args.imagenet and not args.inat else 100
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
@@ -337,7 +446,14 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             with open(args.classes, 'r') as fh:
                 classes = list(map(int, fh.read().split(',')))
         else:
-            classes = list(imagenet100) if args.imagenet else list(range(N))
+            if args.inat:
+                raise NotImplementedError
+            if args.imagenet or args.inat:
+                classes = list(range(1000)) if args.imagenet else list(iNat)
+                shuffle(classes)
+                classes = classes[:N]
+            else:
+                classes = list(range(N))
             shuffle(classes)
             with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
                 fh.write(','.join(map(str, classes)))
@@ -345,7 +461,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
-    if args.imagenet:
+    if args.imagenet or args.inat:
         train1 = ImageFolderSubset(
             included_classes=set1, root=os.path.join(data_root, 'train'),
             transform=trainTransform)
@@ -377,46 +493,90 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
         test1 = SplitCifarDataSet(test_set, set1)
         test2 = SplitCifarDataSet(test_set, set2)
 
-        if args.ftSVHN:
-            train2 = dset.svhn.SVHN(
-                root=args.ftSVHN, split='train', download=False,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-            )
-            test2 = dset.svhn.SVHN(
-                root=args.ftSVHN, split='test', download=False,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-            )
-            if args.limitTransClsSize:
-                train2 = ReducedDataSet(train2, cls_size=args.limitTransClsSize)
-                test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
-        elif args.ftCIFAR10:
+    if args.ftSVHN:
+        train2 = dset.svhn.SVHN(
+            root=args.ftSVHN, split='train', download=False,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        )
+        test2 = dset.svhn.SVHN(
+            root=args.ftSVHN, split='test', download=False,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        )
+        if args.limitTransClsSize:
+            train2 = ReducedDataSet(train2, cls_size=args.limitTransClsSize)
+            test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
+    elif args.ftCIFAR10:
+        normMean = [0.5423671, 0.53410053, 0.52827841]
+        normStd = [0.30129549, 0.29579896, 0.29065931]
 
-            normMean = [0.5423671, 0.53410053, 0.52827841]
-            normStd = [0.30129549, 0.29579896, 0.29065931]
+        normTransform = transforms.Normalize(normMean, normStd)
+        trainTransform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normTransform
+        ])
+        testTransform = transforms.Compose([
+            transforms.ToTensor(),
+            normTransform
+        ])
 
-            normTransform = transforms.Normalize(normMean, normStd)
+        train2 = dset.CIFAR10(
+            root=data_root, train=True, download=download, transform=trainTransform)
+        test2 = dset.CIFAR10(
+            root=data_root, train=False,
+            download=download, transform=testTransform)
+        if args.limitTransClsSize:
+            train2 = ReducedDataSet(train2, cls_size=args.limitTransClsSize)
+            test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
+    elif args.ftINat:
+        if os.path.isdir(os.path.join(args.ftINat, 'train')):
+            normTransform = transforms.Normalize([0.47988829016685486, 0.5008001327514648, 0.44249215722084045],
+                                                 [0.23306521773338318, 0.2292032092809677, 0.27000948786735535])
             trainTransform = transforms.Compose([
-                transforms.RandomCrop(32, padding=4),
+                transforms.RandomCrop(224),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 normTransform
             ])
             testTransform = transforms.Compose([
+                transforms.RandomCrop(224),
                 transforms.ToTensor(),
                 normTransform
             ])
-            train2 = dset.CIFAR10(
-                root=data_root, train=True, download=download, transform=trainTransform)
-            test2 = dset.CIFAR10(
-                root=data_root, train=False,
-                download=download, transform=testTransform)
-            if args.limitTransClsSize:
-                train2 = ReducedDataSet(train2, cls_size=args.limitTransClsSize)
-                test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
+            train2 = dset.folder.ImageFolder(root=os.path.join(args.ftINat, 'train'), transform=trainTransform)
+            test2 = dset.folder.ImageFolder(root=os.path.join(args.ftINat, 'val'), transform=testTransform)
+        else:
+            orig = whole_set = dset.folder.ImageFolder(root=args.ftINat)
+            whole_set = ReducedDataSet(dataset=whole_set, cls_size=(args.limitTransClsSize or 600) + 50,
+                                       min_cls_size=(args.limitTransClsSize or 600) + 50, min_classes=50,
+                                       max_classes=50)
+            normTransform = transforms.Normalize(*get_inat_dataset_stats(whole_set))
+            trainTransform = transforms.Compose([
+                transforms.RandomCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normTransform
+            ])
+            testTransform = transforms.Compose([
+                transforms.RandomCrop(224),
+                transforms.ToTensor(),
+                normTransform
+            ])
+            train2, test2 = split_train_val(
+                whole_set, val_size=50, train_transform=trainTransform, val_transform=testTransform)
+            if args.ftCopySubset:
+                for name, dataset in [('train', train2), ('val', test2)]:
+                    for idx in dataset.indices:
+                        path = orig.imgs[whole_set.dataset_indices[idx]][0]
+                        new_path = path.replace(args.ftINat, os.path.join(args.ftCopySubset, name))
+                        if not os.path.exists(os.path.dirname(new_path)):
+                            os.makedirs(os.path.dirname(new_path))
+                        shutil.copy2(path, new_path)
 
     trainLoader = DataLoader(
         train1, batch_size=args.batchSz, shuffle=True, **kwargs)
@@ -466,7 +626,7 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     print('Start transfer training with ft={}'.format(ft_blocks))
     cifar10 = args.cifar == 10
 
-    if args.imagenet:
+    if args.imagenet or args.inat:
         net = DenseNetVision(
             growth_rate=32, block_config=[6, 12, 24, 16],
             num_classes=1000, num_init_features=64,
