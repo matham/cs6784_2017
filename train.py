@@ -252,6 +252,8 @@ def main():
     parser.add_argument('--ftINat', type=str, default='')
     parser.add_argument('--ftCopySubset', type=str, default='')
     parser.add_argument('--ftCIFAR10', action='store_true')
+    parser.add_argument('--trainAOnly', action='store_true')
+    parser.add_argument('--dropBinaryAt', type=int, default=0)
     parser.add_argument('--limitTransClsSize', type=int, default=0)
     parser.add_argument('--dataRoot')
     parser.add_argument('--classes')
@@ -370,7 +372,7 @@ def main():
             for i in range(0, 16, args.nTransFTBlockLayersStep):
                 blocks[-1] = (block, i + 1)
                 run_transfer_dset_b(args, blocks, *res)
-        else:
+        elif not args.trainAOnly:
             run_transfer_dset_b(args, 'all', *res)
     else:
         run(args, optimizer, net, trainTransform, testTransform)
@@ -709,6 +711,9 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
 
 def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
     net.train()
+    if args.dropBinaryAt and args.dropBinaryAt <= epoch:
+        bin_labels = []
+
     nProcessed = 0
     nTrain = len(trainLoader.dataset)
     ts0 = time.perf_counter()
@@ -722,6 +727,8 @@ def train(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
         bin_weights = [w / weight_sum for w in bin_weights]
     else:
         bin_weights = [1 for _ in bin_labels]
+    if binary_only and args.dropBinaryAt:
+        raise Exception('Cannot have binary only and early binary dropping')
 
     for batch_idx, (data, target) in enumerate(trainLoader):
         ts0_batch = time.perf_counter()
@@ -971,6 +978,8 @@ def train_maml(args, epoch, net, trainLoader, optimizer, trainF, bin_labels):
 
 def test(args, epoch, net, testLoader, optimizer, testF, bin_labels):
     net.eval()
+    if args.dropBinaryAt and args.dropBinaryAt <= epoch:
+        bin_labels = []
     test_loss = 0
     incorrect = 0
     fc_incorrect = 0
