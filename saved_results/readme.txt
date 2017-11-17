@@ -304,3 +304,22 @@ inat-rand-transfer
 
 Fine tune on inat by resetting only the last layer and training/testing on inat. The baseline model came from imagenet100-transfer. inat was randomly extracted to 50 classes, 600/class train and 50/class test.
 
+-------------------------------
+11/16
+Prajna
+fbf58e60ef9da912113c069c5d496d1bda85e1f1
+inat-transfer-binary
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/imagenet --save results --imagenet  --trans --batchSz 45 --classes class_shuffled --preTrainedModel model_cifar10_base.t7 --ftINat /root/Desktop/shared-docker/python/cifar/inat-mini --binWeight .4 --binClasses 1 | tee log
+
+
+Fine tune on inat by resetting only the last layer and training/testing on inat. The baseline model came from imagenet100-transfer-binary2. inat was inat-mini, 50 classes, 600/class train and 50/class test.
+
+----------------------------------
+11/16
+Ayons PC
+7b4fea52833a2ad0ab06aa57ad41cf3095b0d331
+cifar100-binary-drop
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --dropBinaryAt 125 | tee log
+
+50/50 random split. Train on A by adding 4 binary classifiers with loss weight .4 and a FC layer then fine tune on B. AFter 125 epochs on A, the binary loss was dropped for the remainder of training on A (and B of course).
+
