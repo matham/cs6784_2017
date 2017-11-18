@@ -253,6 +253,7 @@ def main():
     parser.add_argument('--ftCopySubset', type=str, default='')
     parser.add_argument('--ftCIFAR10', action='store_true')
     parser.add_argument('--trainAOnly', action='store_true')
+    parser.add_argument('--inatNClasses', type=int, default=50)
     parser.add_argument('--dropBinaryAt', type=int, default=0)
     parser.add_argument('--limitTransClsSize', type=int, default=0)
     parser.add_argument('--dataRoot')
@@ -538,8 +539,8 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             test2 = ReducedDataSet(test2, cls_size=args.limitTransClsSize)
     elif args.ftINat:
         if os.path.isdir(os.path.join(args.ftINat, 'train')):
-            normTransform = transforms.Normalize([0.47988829016685486, 0.5008001327514648, 0.44249215722084045],
-                                                 [0.23306521773338318, 0.2292032092809677, 0.27000948786735535])
+            normTransform = transforms.Normalize([0.481523334980011, 0.5006749033927917, 0.4647780954837799],
+                                                 [0.2249356061220169, 0.22407741844654083, 0.2626110017299652])
             trainTransform = transforms.Compose([
                 transforms.RandomCrop(224),
                 transforms.RandomHorizontalFlip(),
@@ -556,8 +557,8 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
         else:
             orig = whole_set = dset.folder.ImageFolder(root=args.ftINat)
             whole_set = ReducedDataSet(dataset=whole_set, cls_size=(args.limitTransClsSize or 600) + 50,
-                                       min_cls_size=(args.limitTransClsSize or 600) + 50, min_classes=50,
-                                       max_classes=50)
+                                       min_cls_size=(args.limitTransClsSize or 600) + 50, min_classes=args.inatNClasses,
+                                       max_classes=args.inatNClasses)
             normTransform = transforms.Normalize(*get_inat_dataset_stats(whole_set))
             trainTransform = transforms.Compose([
                 transforms.RandomCrop(224),
