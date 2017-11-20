@@ -254,6 +254,7 @@ def main():
     parser.add_argument('--ftCIFAR10', action='store_true')
     parser.add_argument('--trainAOnly', action='store_true')
     parser.add_argument('--inatNClasses', type=int, default=50)
+    parser.add_argument('--imgnetNClasses', type=int, default=50)
     parser.add_argument('--dropBinaryAt', type=int, default=0)
     parser.add_argument('--limitTransClsSize', type=int, default=0)
     parser.add_argument('--dataRoot')
@@ -439,7 +440,7 @@ def run(args, optimizer, net, trainTransform, testTransform):
 
 def run_transfer(args, optimizer, net, trainTransform, testTransform):
     cifar10 = args.cifar == 10
-    N = args.cifar if not args.imagenet and not args.inat else 100
+    N = args.cifar if not args.imagenet and not args.inat else 2 * args.imgnetNClasses
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
