@@ -245,6 +245,7 @@ def main():
     parser.add_argument('--binWeight', type=float, default=.67)
     parser.add_argument('--binWeightDecay', action='store_true')
     parser.add_argument('--imagenet', action='store_true')
+    parser.add_argument('--tinyImagenet', action='store_true')
     parser.add_argument('--inat', action='store_true')
     parser.add_argument('--no-cuda', action='store_true')
     parser.add_argument('--noRetrainAll', action='store_true')
@@ -291,7 +292,7 @@ def main():
     else:
         net = densenet.DenseNet(
             growthRate=12, depth=100, reduction=0.5,
-            bottleneck=True, nClasses=(10 if cifar10 else 100),
+            bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
             n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
         )
 
@@ -337,6 +338,23 @@ def main():
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225]),
+        ])
+    elif args.tinyImagenet:
+        normMean =  [0.485, 0.456, 0.406]
+        normStd = [0.229, 0.224, 0.225]
+
+        normTransform = transforms.Normalize(normMean, normStd)
+
+        trainTransform = transforms.Compose([
+            transforms.RandomSizedCrop(64),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normTransform
+        ])
+        testTransform = transforms.Compose([
+            transforms.RandomSizedCrop(64),
+            transforms.ToTensor(),
+            normTransform
         ])
     else:
         if cifar10:
@@ -393,6 +411,15 @@ def run(args, optimizer, net, trainTransform, testTransform):
         test_set = ImageFolderSubset(
             included_classes=classes[:100], root=os.path.join(data_root, 'val'),
             transform=testTransform)
+    elif args.tinyImagenet:
+        classes = list(range(200))
+        shuffle(classes)
+        train_set = ImageFolderSubset(
+            included_classes=classes[:100], root=os.path.join(data_root, 'train'),
+            transform=trainTransform)
+        test_set = ImageFolderSubset(
+            included_classes=classes[:100], root=os.path.join(data_root, 'val'),
+            transform=testTransform)
     elif args.inat:
         whole_set = dset.folder.ImageFolder(root=data_root)
         whole_set = ReducedDataSet(dataset=whole_set, cls_size=650, min_cls_size=650, min_classes=100)
@@ -440,7 +467,16 @@ def run(args, optimizer, net, trainTransform, testTransform):
 
 def run_transfer(args, optimizer, net, trainTransform, testTransform):
     cifar10 = args.cifar == 10
-    N = args.cifar if not args.imagenet and not args.inat else 2 * args.imgnetNClasses
+    if args.imagenet:
+        n_classes = 2 * args.imgnetNClasses
+        n_all = 1000
+    elif args.inat:
+        raise NotImplementedError
+    elif args.tinyImagenet:
+        n_classes = 100
+        n_all = 200
+    else:
+        n_all = n_classes = args.cifar
     download = not args.dataRoot
     data_root = args.dataRoot or 'cifar'
 
@@ -451,22 +487,16 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
             with open(args.classes, 'r') as fh:
                 classes = list(map(int, fh.read().split(',')))
         else:
-            if args.inat:
-                raise NotImplementedError
-            if args.imagenet or args.inat:
-                classes = list(range(1000)) if args.imagenet else list(iNat)
-                shuffle(classes)
-                classes = classes[:N]
-            else:
-                classes = list(range(N))
+            classes = list(range(n_all))
             shuffle(classes)
+            classes = classes[:n_classes]
             with open(os.path.join(args.save, 'class_shuffled'), 'w') as fh:
                 fh.write(','.join(map(str, classes)))
         set1, set2 = classes[:args.transSplit], classes[args.transSplit:]
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
-    if args.imagenet or args.inat:
+    if args.imagenet or args.tinyImagenet:
         train1 = ImageFolderSubset(
             included_classes=set1, root=os.path.join(data_root, 'train'),
             transform=trainTransform)
@@ -639,7 +669,7 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     else:
         net = densenet.DenseNet(
             growthRate=12, depth=100, reduction=0.5,
-            bottleneck=True, nClasses=(10 if cifar10 else 100),
+            bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
             n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
         )
     if args.cuda:
