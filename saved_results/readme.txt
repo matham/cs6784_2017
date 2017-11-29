@@ -439,3 +439,12 @@ tiny-imagenet-transfer-binary2
 
 100 out of the 200 tiny imagenet classes. 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. Classes came from tiny-imagenet-transfer.
 
+----------------------------------
+11/27
+Prajna
+9b6e8d14ceb7b2c683effea2e3d7afcec7cb1c25
+wrn-baseline
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot/root/Desktop/data --save results --cifar100 --trans --wrn --nEpochs112 --nFTEpochs71 | tee log
+
+Cifar 100 on wide resnets. 50/50 random split. Train on A then fine tune on B. We ran, stopped and resumed to reduce the number of epochs as it was converging earlier and took too long.
+
