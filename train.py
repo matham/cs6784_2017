@@ -22,6 +22,7 @@ from torch.autograd import Variable
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 from densenet_vision import DenseNet as DenseNetVision
+from wrn import WideResNet
 from torchvision.utils import save_image
 
 from torch.utils.data import DataLoader, Dataset
@@ -235,6 +236,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--batchSz', type=int, default=64)
     parser.add_argument('--nEpochs', type=int, default=175)
+    parser.add_argument('--nFTEpochs', type=int, default=100)
     parser.add_argument('--trans', action='store_true')
     parser.add_argument('--transBlocks', action='store_true')
     parser.add_argument('--nTransFTBlockLayersStep', type=int, default=2)
@@ -254,6 +256,7 @@ def main():
     parser.add_argument('--ftCopySubset', type=str, default='')
     parser.add_argument('--ftCIFAR10', action='store_true')
     parser.add_argument('--trainAOnly', action='store_true')
+    parser.add_argument('--wrn', action='store_true')
     parser.add_argument('--inatNClasses', type=int, default=50)
     parser.add_argument('--imgnetNClasses', type=int, default=50)
     parser.add_argument('--dropBinaryAt', type=int, default=0)
@@ -290,11 +293,15 @@ def main():
             num_classes=1000, num_init_features=64,
             n_binary_class=args.binClasses, binary_only=args.binWeight == 1.)
     else:
-        net = densenet.DenseNet(
-            growthRate=12, depth=100, reduction=0.5,
-            bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
-            n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
-        )
+        if args.wrn:
+            net = WideResNet(depth=28, num_classes=100, widen_factor=10, dropRate=.3,
+                             n_binary_class=args.binClasses)
+        else:
+            net = densenet.DenseNet(
+                growthRate=12, depth=100, reduction=0.5,
+                bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
+                n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
+            )
 
     print('  + Number of params: {}'.format(
         sum([p.data.nelement() for p in net.parameters()])))
@@ -634,8 +641,9 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
         # best_state = net.state_dict()
         ts0 = time.perf_counter()
         train_fn = train_maml if args.maml else train
-        for epoch in range(1, 175 + 1):
-            adjust_opt(args.opt, optimizer, epoch)
+        opt = adjust_opt_wrn if args.wrn else adjust_opt
+        for epoch in range(1, args.nEpochs + 1):
+            opt(args.opt, optimizer, epoch)
             train_fn(args, epoch, net, trainLoader, optimizer, trainF, bin_labels)
             err = test(args, epoch, net, testLoader, optimizer, testF, bin_labels)
 
@@ -657,6 +665,7 @@ def run_transfer(args, optimizer, net, trainTransform, testTransform):
 
     return train2, test2, fname
 
+
 def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     print('Start transfer training with ft={}'.format(ft_blocks))
     cifar10 = args.cifar == 10
@@ -667,11 +676,15 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
             num_classes=1000, num_init_features=64,
             n_binary_class=args.binClasses, binary_only=args.binWeight == 1.)
     else:
-        net = densenet.DenseNet(
-            growthRate=12, depth=100, reduction=0.5,
-            bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
-            n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
-        )
+        if args.wrn:
+            net = WideResNet(depth=28, num_classes=100, widen_factor=10, dropRate=.3,
+                             n_binary_class=args.binClasses)
+        else:
+            net = densenet.DenseNet(
+                growthRate=12, depth=100, reduction=0.5,
+                bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
+                n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
+            )
     if args.cuda:
         net = net.cuda()
 
@@ -691,7 +704,7 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
             {'params': ft_params, 'lr': 1e-2}
         ]
         opt_func = adjust_opt_transfer
-        epochs = 100
+        epochs = args.nFTEpochs
     else:
         param_vals = reset_params + ft_params
         opt_func = adjust_opt_transfer_baseline
@@ -1091,6 +1104,21 @@ def adjust_opt(optAlg, optimizer, epoch):
             lr = 1e-2
         elif epoch == 151:
             lr = 1e-3
+        else:
+            return
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
+
+def adjust_opt_wrn(optAlg, optimizer, epoch):
+    if optAlg == 'sgd':
+        if epoch == 60:
+            lr = 1e-1 * .2
+        elif epoch == 120:
+            lr = 1e-1 * (.2 ** 2)
+        elif epoch == 160:
+            lr = 1e-1 * (.2 ** 3)
         else:
             return
 
