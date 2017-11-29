@@ -448,3 +448,12 @@ wrn-baseline
 
 Cifar 100 on wide resnets. 50/50 random split. Train on A then fine tune on B. We ran, stopped and resumed to reduce the number of epochs as it was converging earlier and took too long.
 
+----------------------------------
+11/27
+Ayons PC
+fcbc39d3daf8f6e642aa6919f199870534326515
+results_v2
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train_v2.py | tee log
+
+Baseline run, model for B was last of A. Binary layer was always present, just unused sometimes. Verification run using new code on cifar 100 50/50 split with and without binary classifier with weight .4.
+
