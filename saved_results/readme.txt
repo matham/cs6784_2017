@@ -457,3 +457,12 @@ results_v2
 
 Baseline run, model for B was last of A. Binary layer was always present, just unused sometimes. Verification run using new code on cifar 100 50/50 split with and without binary classifier with weight .4.
 
+----------------------------------
+11/27
+Ayons PC
+fcbc39d3daf8f6e642aa6919f199870534326515
+results_v2-best
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train_v2.py | tee log
+
+Baseline run, model for B was best of A. Binary layer only present during binary training. Verification run using new code on cifar 100 50/50 split with and without binary classifier with weight .4.
+
