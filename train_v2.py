@@ -124,7 +124,7 @@ def main():
     net.reset_last_layer()
     state = best_state if use_best_state else net.state_dict()
 
-    net, optimizer = get_net(transfer=True)
+    net, optimizer = get_net(transfer=True, binary=True)
     net.load_state_dict(state)
     net.reset_last_layer()
 
