@@ -480,7 +480,7 @@ Ayons PC
 results_v2-last2
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train_v2.py | tee log
 
-Baseline run, model for B was last of A. Binary layer only present during binary training. Verification run using new code on cifar 100 50/50 split with and without binary classifier with weight .4.
+Baseline run, model for B was last of A. Binary layer only present during binary training. Verification run using new code on cifar 100 50/50 split with and without binary classifier with weight .4. Classes were newly generated and not the same as results_v2.
 
 ----------------------------------
 11/28
