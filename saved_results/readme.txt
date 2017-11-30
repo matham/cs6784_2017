@@ -183,6 +183,7 @@ cifar100-transfer-binary-classifier10
 Prajna
 cc68dc2f23820e6ff705c50c01da0929eaa5445d
 imagenet100-transfer
+158
 (pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/imagenet --save results --imagenet --trans --batchSz 45 | tee log
 
 imagenet 100 classes, 50/50 random split. Train on A and fine tune on B by resetting just the last classifier layer.
@@ -237,6 +238,7 @@ python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans
 Prajna
 709338192300767a42e88284abcf1f5168ef6e8d
 imagenet100-transfer-binary2
+172
 (pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data/imagenet --save results --imagenet --trans --batchSz 45 --binWeight .4 --binClasses 1 | tee log
 
 imagenet 100 classes, 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer and fine tune on B.
@@ -336,6 +338,7 @@ Fine tune on inat by resetting only the last layer and training/testing on inat.
 Ayons PC
 7b4fea52833a2ad0ab06aa57ad41cf3095b0d331
 cifar100-baseline
+139
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans | tee log
 
 50/50 random split. Train on A by adding a FC layer then fine tune on B.
@@ -354,6 +357,7 @@ Fine tune on inat by resetting only the last layer and training/testing on inat.
 Ayons PC
 7b4fea52833a2ad0ab06aa57ad41cf3095b0d331
 cifar100-transfer-binary-classifier13
+165
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 | tee log
 
 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B.
@@ -399,6 +403,7 @@ cifar100-baseline2
 Ayons PC
 61842fd9fa3f6aab4972d77cf982ba76c8483440
 cifar100-baseline3
+153
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans | tee log
 
 50/50 random split. Train on A by adding a FC layer then fine tune on B.
@@ -408,6 +413,7 @@ cifar100-baseline3
 Ayons PC
 61842fd9fa3f6aab4972d77cf982ba76c8483440
 cifar100-transfer-binary-classifier14
+135
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 | tee log
 
 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B.
@@ -444,6 +450,7 @@ tiny-imagenet-transfer-binary2
 Prajna
 9b6e8d14ceb7b2c683effea2e3d7afcec7cb1c25
 wrn-baseline
+111
 (pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot/root/Desktop/data --save results --cifar100 --trans --wrn --nEpochs112 --nFTEpochs71 | tee log
 
 Cifar 100 on wide resnets. 50/50 random split. Train on A then fine tune on B. We ran, stopped and resumed to reduce the number of epochs as it was converging earlier and took too long.
@@ -474,4 +481,24 @@ results_v2-last2
 (pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train_v2.py | tee log
 
 Baseline run, model for B was last of A. Binary layer only present during binary training. Verification run using new code on cifar 100 50/50 split with and without binary classifier with weight .4.
+
+----------------------------------
+11/28
+Prajna
+9b6e8d14ceb7b2c683effea2e3d7afcec7cb1c25
+wrn-binary
+99
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --wrn --nEpochs 112 --nFTEpochs 71 --binClasses 1 --binWeight .4 | tee log
+
+Cifar 100 on wide resnets. 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B.
+
+----------------------------------
+11/29
+Prajna
+9b6e8d14ceb7b2c683effea2e3d7afcec7cb1c25
+cifar100-transfer-binary-classifier15
+166
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled | tee log
+
+50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-baseline.
 
