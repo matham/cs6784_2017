@@ -532,3 +532,12 @@ cifar100-transfer-binary-classifier18
 
 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-transfer-binary-classifier14.
 
+----------------------------------
+11/28
+Ayons PC
+5341ae8b6023aa2b164a3899c8f79d87221d7037
+results_v2-135
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train_v2.py | tee log
+
+Baseline/binary run, model for B was of A at 135 epochs. Classes were newly generated and not the same as results_v2.
+
