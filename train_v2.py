@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 
 import os
 import sys
+import copy
 import math
 import numpy as np
 from random import shuffle
@@ -30,20 +31,20 @@ data_dir = '/root/Desktop/data'
 results_dir = 'results_v2'
 batch = 64
 bin_weight = 0.4
-baseline_epocs = 175
+baseline_epocs = 130
 ft_epochs = 100
 classes_a = np.array([
-    86, 98, 50, 10, 24, 25, 40, 58, 47, 12, 18, 90, 13, 64, 97, 94, 7, 81, 52,
-    28, 42, 0, 92, 69, 16, 6, 39, 41, 79, 59, 75, 30, 80, 72, 70, 56, 43,
-    15, 8, 91, 46, 73, 89, 68, 4, 61, 51, 55, 27, 95],
+    16, 20, 92, 81, 80, 89, 18, 66, 3, 33, 96, 25, 64, 26, 75, 17,
+    59, 87, 93, 56, 71, 52, 31, 47, 86, 77, 94, 44, 1, 70, 84, 40,
+    43, 73, 55, 4, 21, 9, 46, 63, 54, 11, 2, 13, 23, 42, 28, 19, 24, 95],
     dtype=np.int64)
 classes_a_bin = classes_a[:25]
 use_best_state = False
 
 
 def main():
-    torch.manual_seed(1)
-    torch.cuda.manual_seed(1)
+    torch.manual_seed(37)
+    torch.cuda.manual_seed(37)
 
     if os.path.exists(results_dir):
         shutil.rmtree(results_dir)
@@ -110,22 +111,22 @@ def main():
         sum([p.data.nelement() for p in net.parameters()])))
 
     best_state = run_base(net, trainLoaderA, testLoaderA, optimizer, binary=False)
-    net.reset_last_layer()
     state = best_state if use_best_state else net.state_dict()
+    torch.save(state, os.path.join(results_dir, 'model_state.t7'))
 
     net, optimizer = get_net(transfer=True)
-    net.load_state_dict(state)
+    net.load_state_dict(torch.load(os.path.join(results_dir, 'model_state.t7')))
     net.reset_last_layer()
 
     run_transfer(net, trainLoaderB, testLoaderB, optimizer, binary=False)
 
     net, optimizer = get_net(binary=True, transfer=False)
     best_state = run_base(net, trainLoaderA, testLoaderA, optimizer, binary=True)
-    net.reset_last_layer()
     state = best_state if use_best_state else net.state_dict()
+    torch.save(state, os.path.join(results_dir, 'model_state_binary.t7'))
 
     net, optimizer = get_net(transfer=True, binary=True)
-    net.load_state_dict(state)
+    net.load_state_dict(torch.load(os.path.join(results_dir, 'model_state_binary.t7')))
     net.reset_last_layer()
 
     run_transfer(net, trainLoaderB, testLoaderB, optimizer, binary=True)
@@ -146,7 +147,7 @@ def run_base(net, trainLoader, testLoader, optimizer, binary):
         new_loss = test(epoch, net, testLoader, testF, binary, transfer)
         if new_loss < best_loss:
             best_loss = new_loss
-            best_state = net.state_dict()
+            best_state = copy.deepcopy(net.state_dict())
             print('new best results')
 
     trainF.close()

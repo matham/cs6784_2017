@@ -299,7 +299,7 @@ def main():
         else:
             net = densenet.DenseNet(
                 growthRate=12, depth=100, reduction=0.5,
-                bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
+                bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 100),
                 n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
             )
 
@@ -682,7 +682,7 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
         else:
             net = densenet.DenseNet(
                 growthRate=12, depth=100, reduction=0.5,
-                bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 200),
+                bottleneck=True, nClasses=(10 if cifar10 and not args.tinyImagenet else 100),
                 n_binary_class=args.binClasses, binary_only=args.binWeight == 1.
             )
     if args.cuda:
