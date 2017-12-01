@@ -502,3 +502,23 @@ cifar100-transfer-binary-classifier15
 
 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-baseline.
 
+----------------------------------
+11/30
+Prajna
+9b6e8d14ceb7b2c683effea2e3d7afcec7cb1c25
+cifar100-transfer-binary-classifier16
+143
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled | tee log
+
+50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-baseline3.
+
+----------------------------------
+11/30
+Ayons PC
+8838953601461d07953bcb4a36fbcc43be37aace
+cifar100-transfer-binary-classifier17
+148
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled | tee log
+
+50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-baseline3, number of fc units was reduced from 200 to 100.
+
