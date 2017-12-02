@@ -541,3 +541,12 @@ results_v2-135
 
 Baseline/binary run, model for B was of A at 135 epochs. Classes were newly generated and not the same as results_v2.
 
+----------------------------------
+11/30
+Ayons PC
+5341ae8b6023aa2b164a3899c8f79d87221d7037
+cifar100-transfer-binary-classifier19
+(pytorch) root@63a8c9378964:~/Desktop/shared_docker/cs6784_2017# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled --nEpochs 130 | tee log
+
+50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-baseline3, only 130 epochs used.
+
