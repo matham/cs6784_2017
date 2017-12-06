@@ -550,3 +550,33 @@ cifar100-transfer-binary-classifier19
 
 50/50 random split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes is from cifar100-baseline3, only 130 epochs used.
 
+----------------------------------
+12/2
+Prajna
+5341ae8b6023aa2b164a3899c8f79d87221d7037
+wrn-binary2
+99
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --wrn --nEpochs 112 --nFTEpochs 71 --binClasses 1 --binWeight .4 --classes class_shuffled | tee log
+
+Cifar 100 on wide resnets. 50/50 split. Train on A by adding 1 binary classifier with loss weight .4 and a FC layer then fine tune on B. classes from cifar100-baseline3.
+
+----------------------------------
+12/2
+Prajna
+5341ae8b6023aa2b164a3899c8f79d87221d7037
+wrn-baseline2
+99
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --wrn --nEpochs 112 --nFTEpochs 71 --classes class_shuffled | tee log
+
+Cifar 100 on wide resnets. 50/50 split. Train on A then fine tune on B. classes from cifar100-baseline3.
+
+----------------------------------
+12/4
+Prajna
+5341ae8b6023aa2b164a3899c8f79d87221d7037
+wrn-baseline3
+99
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --wrn --nEpochs 112 --nFTEpochs 71 --classes class_shuffled --seed 246 | tee log
+
+Cifar 100 on wide resnets. 50/50 split. Train on A then fine tune on B. classes from wrn-baseline.
+
