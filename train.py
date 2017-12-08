@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from functools import partial
 import argparse
 from PIL import Image
 import torch
@@ -239,6 +240,7 @@ def main():
     parser.add_argument('--nFTEpochs', type=int, default=100)
     parser.add_argument('--trans', action='store_true')
     parser.add_argument('--transBlocks', action='store_true')
+    parser.add_argument('--transBlocksLayers', action='store_true')
     parser.add_argument('--nTransFTBlockLayersStep', type=int, default=2)
     parser.add_argument('--transFTBlock', type=int, default=0)
     parser.add_argument('--transNatSplit', action='store_true')
@@ -257,6 +259,7 @@ def main():
     parser.add_argument('--ftCIFAR10', action='store_true')
     parser.add_argument('--trainAOnly', action='store_true')
     parser.add_argument('--wrn', action='store_true')
+    parser.add_argument('--freezeReduce', action='store_true')
     parser.add_argument('--inatNClasses', type=int, default=50)
     parser.add_argument('--imgnetNClasses', type=int, default=50)
     parser.add_argument('--dropBinaryAt', type=int, default=0)
@@ -399,6 +402,17 @@ def main():
             for i in range(0, 16, args.nTransFTBlockLayersStep):
                 blocks[-1] = (block, i + 1)
                 run_transfer_dset_b(args, blocks, *res)
+        elif args.transBlocksLayers:
+            for block in range(1, 4):
+                blocks = list(range(1, block + 1))
+                for i in range(0, 15, args.nTransFTBlockLayersStep):
+                    blocks[-1] = (block, i + 1)
+                    run_transfer_dset_b(args, blocks, *res)
+
+                if block == 3:
+                    run_transfer_dset_b(args, 'all', *res)
+                else:
+                    run_transfer_dset_b(args, blocks, *res)
         elif not args.trainAOnly:
             run_transfer_dset_b(args, 'all', *res)
     else:
@@ -691,20 +705,37 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
     state = net.state_dict()
     state.update(torch.load(filename))
     net.load_state_dict(state)
-    if ft_blocks == 'all':
+
+    if args.freezeReduce:
+        if ft_blocks == 'all':
+            net.freeze_layers([1, 2, 3])
+        else:
+            net.freeze_layers(ft_blocks)
+
+        net.reset_final_layer()
+        ft_params, reset_params = net.split_final_params()
+        ft_params = list(filter(lambda p: p.requires_grad, ft_params))
+    elif ft_blocks == 'all':
         net.reset_final_layer()
         ft_params, reset_params = net.split_final_params()
     else:
         net.reset_layers(ft_blocks)
         ft_params, reset_params = net.split_transfer_params(ft_blocks)
 
-    if ft_blocks:
-        param_vals = [
-            {'params': reset_params, 'lr': 1e-1},
-            {'params': ft_params, 'lr': 1e-2}
-        ]
-        opt_func = adjust_opt_transfer
-        epochs = args.nFTEpochs
+    if ft_blocks or args.freezeReduce:
+        if ft_params:
+            param_vals = [
+                {'params': reset_params, 'lr': 1e-1},
+                {'params': ft_params, 'lr': 1e-2}
+            ]
+        else:
+            param_vals = [{'params': reset_params, 'lr': 1e-1}]
+        if args.freezeReduce:
+            epochs = 40
+            opt_func = partial(adjust_opt_transfer, epoch1=26, epoch2=36)
+        else:
+            opt_func = adjust_opt_transfer
+            epochs = args.nFTEpochs
     else:
         param_vals = reset_params + ft_params
         opt_func = adjust_opt_transfer_baseline
@@ -1126,11 +1157,11 @@ def adjust_opt_wrn(optAlg, optimizer, epoch):
             param_group['lr'] = lr
 
 
-def adjust_opt_transfer(optAlg, optimizer, epoch):
+def adjust_opt_transfer(optAlg, optimizer, epoch, epoch1=51, epoch2=76):
     fc, base = optimizer.param_groups
-    if epoch == 51:
+    if epoch == epoch1:
         fc['lr'] = base['lr'] = 1e-2
-    elif epoch == 76:
+    elif epoch == epoch2:
         fc['lr'] = base['lr'] = 1e-3
 
 

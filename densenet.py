@@ -164,6 +164,35 @@ class DenseNet(nn.Module):
         ft_params = [p for p in params if not [r_p for r_p in reset_params if r_p is p]]
         return ft_params, reset_params
 
+    def freeze_layers(self, freeze_blocks):
+        normal_layers = [self.fc] if not self.binary_only else []
+        normal_layers.extend(self.binary_layers)
+        blocks_skipped = {b[0] if isinstance(b, tuple) else b for b in freeze_blocks}
+        for i in range(1, 4):
+            if i not in blocks_skipped:
+                normal_layers.extend(self.layer_funcs[i]())
+
+        for block in freeze_blocks:
+            if isinstance(block, tuple):
+                block, layer = block
+                normal_layers.extend(self.layer_funcs[block](layer))
+
+        params = list(self.parameters())
+        normal_params = []
+        for layer in normal_layers:
+            normal_params.extend(layer.parameters())
+
+        freeze_params = [p for p in params if not [r_p for r_p in normal_params if r_p is p]]
+
+        def walk_freeze_params(params):
+            for p in params:
+                assert isinstance(p, (list, tuple, Variable))
+                if isinstance(p, (list, tuple)):
+                    walk_freeze_params(p)
+                else:
+                    p.requires_grad = False
+        walk_freeze_params(freeze_params)
+
     def split_final_params(self):
         reset_layers = [self.fc] if not self.binary_only else []
         reset_layers.extend(self.binary_layers)

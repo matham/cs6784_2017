@@ -600,3 +600,13 @@ cifar100-baseline5
 
 50/50 random split. Train on A by adding a FC layer then fine tune on B. classes from cifar100-transfer-binary-classifier14
 
+----------------------------------
+12/6
+Prajna
+5341ae8b6023aa2b164a3899c8f79d87221d7037
+wrn-baseline4
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --wrn --nEpochs 112 --nFTEpochs 71 --classes class_shuffled --seed 682 | tee log
+
+Cifar 100 on wide resnets. 50/50 split. Train on A then fine tune on B. classes from wrn-binary.
+
