@@ -610,3 +610,43 @@ wrn-baseline4
 
 Cifar 100 on wide resnets. 50/50 split. Train on A then fine tune on B. classes from wrn-binary.
 
+----------------------------------
+12/7
+Prajna
+a89573ab5043d8fdca36abced8cce77dddda2fce
+cifar100-freeze-baseline
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes class_shuffled --preTrainedModel model_cifar100_base.t7 --freezeReduce --transBlocksLayers --nTransFTBlockLayersStep 4 --seed 6542 | tee log
+
+50/50 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 1-3 starting from layer n for n in range(0, 16, 4). Where 16 is the number of layers in the block. The A model came from cifar100-baseline5.
+
+----------------------------------
+12/8
+Prajna
+a89573ab5043d8fdca36abced8cce77dddda2fce
+cifar100-freeze-binary
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled --preTrainedModel model_cifar100_base_binary.t7 --freezeReduce --transBlocksLayers --nTransFTBlockLayersStep 4 --seed 2536 | tee log
+
+50/50 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 1-3 starting from layer n for n in range(0, 16, 4). Where 16 is the number of layers in the block. The A model came from cifar100-transfer-binary-classifier14.
+
+----------------------------------
+12/7
+Prajna
+a89573ab5043d8fdca36abced8cce77dddda2fce
+cifar100-freeze-baseline2
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes class_shuffled --preTrainedModel model_cifar100_base.t7 --freezeReduce --transBlocksLayers --nTransFTBlockLayersStep 4 --seed 5456 | tee log
+
+50/50 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 1-3 starting from layer n for n in range(0, 16, 4). Where 16 is the number of layers in the block. The A model came from cifar100-baseline4.
+
+----------------------------------
+12/8
+Prajna
+a89573ab5043d8fdca36abced8cce77dddda2fce
+cifar100-freeze-binary2
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled --preTrainedModel model_cifar100_base_binary.t7 --freezeReduce --transBlocksLayers --nTransFTBlockLayersStep 4 --seed 8898 | tee log
+
+50/50 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 1-3 starting from layer n for n in range(0, 16, 4). Where 16 is the number of layers in the block. The A model came from cifar100-transfer-binary-classifier13.
+
