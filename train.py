@@ -409,6 +409,7 @@ def main():
                     blocks[-1] = (block, i + 1)
                     run_transfer_dset_b(args, blocks, *res)
 
+                blocks = list(range(1, block + 1))
                 if block == 3:
                     run_transfer_dset_b(args, 'all', *res)
                 else:
@@ -1158,7 +1159,11 @@ def adjust_opt_wrn(optAlg, optimizer, epoch):
 
 
 def adjust_opt_transfer(optAlg, optimizer, epoch, epoch1=51, epoch2=76):
-    fc, base = optimizer.param_groups
+    if len(optimizer.param_groups) == 2:
+        fc, base = optimizer.param_groups
+    else:
+        fc, = optimizer.param_groups
+        base = {'lr': 3}
     if epoch == epoch1:
         fc['lr'] = base['lr'] = 1e-2
     elif epoch == epoch2:
