@@ -183,6 +183,8 @@ class DenseNet(nn.Module):
             normal_params.extend(layer.parameters())
 
         freeze_params = [p for p in params if not [r_p for r_p in normal_params if r_p is p]]
+        if not freeze_blocks:
+            assert not freeze_params
 
         def walk_freeze_params(params):
             for p in params:

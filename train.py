@@ -260,6 +260,7 @@ def main():
     parser.add_argument('--trainAOnly', action='store_true')
     parser.add_argument('--wrn', action='store_true')
     parser.add_argument('--freezeReduce', action='store_true')
+    parser.add_argument('--ftReduceEpochs', action='store_true')
     parser.add_argument('--inatNClasses', type=int, default=50)
     parser.add_argument('--imgnetNClasses', type=int, default=50)
     parser.add_argument('--dropBinaryAt', type=int, default=0)
@@ -403,6 +404,7 @@ def main():
                 blocks[-1] = (block, i + 1)
                 run_transfer_dset_b(args, blocks, *res)
         elif args.transBlocksLayers:
+            run_transfer_dset_b(args, [], *res)
             for block in range(1, 4):
                 blocks = list(range(1, block + 1))
                 for i in range(0, 15, args.nTransFTBlockLayersStep):
@@ -723,7 +725,7 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
         net.reset_layers(ft_blocks)
         ft_params, reset_params = net.split_transfer_params(ft_blocks)
 
-    if ft_blocks or args.freezeReduce:
+    if ft_blocks or args.freezeReduce or args.ftReduceEpochs:
         if ft_params:
             param_vals = [
                 {'params': reset_params, 'lr': 1e-1},
@@ -731,7 +733,7 @@ def run_transfer_dset_b(args, ft_blocks, train2, test2, filename):
             ]
         else:
             param_vals = [{'params': reset_params, 'lr': 1e-1}]
-        if args.freezeReduce:
+        if args.freezeReduce or args.ftReduceEpochs:
             epochs = 40
             opt_func = partial(adjust_opt_transfer, epoch1=26, epoch2=36)
         else:

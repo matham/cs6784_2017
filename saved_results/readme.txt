@@ -631,7 +631,7 @@ cifar100-freeze-binary
 50/50 random split. Train on A, then fine tune on B. We fined tuned on B by resetting the layers from dense block 1-3 starting from layer n for n in range(0, 16, 4). Where 16 is the number of layers in the block. The A model came from cifar100-transfer-binary-classifier14.
 
 ----------------------------------
-12/7
+12/9
 Prajna
 a89573ab5043d8fdca36abced8cce77dddda2fce
 cifar100-freeze-baseline2
@@ -642,7 +642,7 @@ cifar100-freeze-baseline2
 
 ----------------------------------
 12/8
-Prajna
+Larrisa
 a89573ab5043d8fdca36abced8cce77dddda2fce
 cifar100-freeze-binary2
 
