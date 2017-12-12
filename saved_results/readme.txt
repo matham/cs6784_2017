@@ -670,3 +670,25 @@ cifar100-60-binary
 
 50/50 random split. Train on A, then fine tune on B. The A model came from cifar100-transfer-binary-classifier14.
 
+----------------------------------
+12/8
+Prajna
+30d2bedcff2fec952bf918383d09f8c7e9c96fa3
+cifar100-60-baseline2
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --classes class_shuffled --preTrainedModel model_cifar100_base.t7 --ftReduceEpochs --limitTransClsSize 60 --seed 4852 | tee log
+
+50/50 random split. Train on A, then fine tune on B. The A model came from cifar100-baseline4.
+
+----------------------------------
+12/8
+Prajna
+30d2bedcff2fec952bf918383d09f8c7e9c96fa3
+cifar100-60-binary2
+
+(pytorch) root@fc95ae5d06e8:~/Desktop/shared-docker/python/cifar# python train.py --dataRoot /root/Desktop/data --save results --cifar 100 --trans --binClasses 1 --binWeight .4 --classes class_shuffled --preTrainedModel model_cifar100_base_binary.t7 --ftReduceEpochs --limitTransClsSize 60 --seed 5412 | tee log
+
+50/50 random split. Train on A, then fine tune on B. The A model came from cifar100-transfer-binary-classifier13.
+
+above replicated 7 times in cifar100-60_13.tar.gz, cifar100-60_14.tar.gz
+
